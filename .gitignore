@@ -1,0 +1,7 @@
+# Original vendor binaries/installers are analyzed locally, never committed
+reference/
+*.msi
+*.cab
+*.exe
+*.ocx
+*.dll
