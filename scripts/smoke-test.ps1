@@ -11,7 +11,9 @@ $settingsFile = Join-Path $env:ProgramData 'BetterBanner\settings.json'
 $log = Join-Path $env:LOCALAPPDATA 'BetterBanner\BetterBanner.log'
 
 function Invoke-Banner([string[]] $Arguments) {
-    $p = Start-Process -FilePath $Exe -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+    # Start-Process does not quote array elements, so quote anything with spaces or quotes ourselves.
+    $commandLine = ($Arguments | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    $p = Start-Process -FilePath $Exe -ArgumentList $commandLine -Wait -PassThru -NoNewWindow
     if ($p.ExitCode -ne 0) { throw "BetterBanner $($Arguments -join ' ') exited with $($p.ExitCode)" }
 }
 function Assert($Condition, [string] $Message) { if (-not $Condition) { throw "FAILED: $Message" } else { Write-Host "ok - $Message" } }
