@@ -14,70 +14,75 @@ public enum WallpaperMode
     /// <summary>Leave the user's wallpaper alone.</summary>
     Off,
 
-    /// <summary>Generate a solid wallpaper in the classification color with the marking in the middle.</summary>
+    /// <summary>Solid classification color with the marking in the middle.</summary>
     Generated,
 
-    /// <summary>Use an administrator-supplied image.</summary>
+    /// <summary>An administrator-supplied image.</summary>
     Image,
 }
 
-public enum WallpaperStyle
-{
-    Center,
-    Tile,
-    Stretch,
-    Fit,
-    Fill,
-}
-
 /// <summary>
-/// All Better Banner settings. Loaded from built-in defaults, then the machine settings file
-/// (%ProgramData%\BetterBanner\settings.json), then Group Policy (HKLM\SOFTWARE\Policies\BetterBanner), last one wins.
+/// Better Banner settings. Effective settings are the built-in defaults, overlaid by the machine settings file
+/// (%ProgramData%\BetterBanner\settings.json), overlaid by Group Policy (HKLM\SOFTWARE\Policies\BetterBanner).
 /// </summary>
 public sealed class BannerSettings
 {
     public ClassificationLevel Level { get; set; } = ClassificationLevel.Unclassified;
 
-    /// <summary>Overrides the level's default caption, e.g. "SECRET//NOFORN". Null uses the preset.</summary>
+    /// <summary>Replaces the level's default text, e.g. "SECRET//NOFORN". Null or empty uses the standard marking.</summary>
     public string? Caption { get; set; }
 
-    /// <summary>Overrides the level's banner color (#RRGGBB). Null uses the preset.</summary>
+    /// <summary>Overrides the level's banner color (#RRGGBB).</summary>
     public string? BackColor { get; set; }
 
-    /// <summary>Overrides the level's text color (#RRGGBB). Null uses the preset.</summary>
+    /// <summary>Overrides the level's text color (#RRGGBB).</summary>
     public string? ForeColor { get; set; }
 
     public BannerPosition Position { get; set; } = BannerPosition.Both;
 
-    /// <summary>Caption font size in points (8-36). 0 means follow the user's title bar font.</summary>
-    public int FontSize { get; set; }
+    /// <summary>Banner text size in points (8-36). Scaled for each monitor's DPI.</summary>
+    public int FontSize { get; set; } = 10;
 
-    /// <summary>Inserted between caption characters, e.g. " " turns SECRET into "S E C R E T". Empty disables.</summary>
-    public string ExpansionDelimiter { get; set; } = "";
-
-    /// <summary>Constant banner transparency in percent (0-50).</summary>
-    public int Transparency { get; set; }
-
-    /// <summary>Transparency in percent (0-90) while the mouse is over the banner, so content underneath can be read.</summary>
+    /// <summary>How see-through the banner gets while the mouse is over it, in percent (0-90).</summary>
     public int HoverTransparency { get; set; } = 40;
 
-    /// <summary>Keep the banner above full-screen applications (presentations, video) so the marking is never hidden.</summary>
+    /// <summary>Keep the banner above full-screen apps (presentations, video) so the marking is never hidden.</summary>
     public bool StayAboveFullScreenApps { get; set; } = true;
 
-    /// <summary>Allow users to close the banner from its menu. Off by default.</summary>
+    /// <summary>Show "Exit" on the banner menu.</summary>
     public bool AllowUserExit { get; set; }
 
-    public ClockSettings Clock { get; set; } = new();
+    public bool ClockEnabled { get; set; }
 
-    public WindowRecoverySettings WindowRecovery { get; set; } = new();
+    /// <summary>.NET custom date/time format. %TZI% becomes "Z" (Zulu) or "L" (local).</summary>
+    public string ClockFormat { get; set; } = "ddd dd-MMM-yy HH:mm%TZI%";
 
-    public ColorPolicySettings Colors { get; set; } = new();
+    public bool ClockUseZulu { get; set; }
 
-    public WallpaperSettings Wallpaper { get; set; } = new();
+    /// <summary>Upper-case the clock text (military style, e.g. 071830Z OCT 26).</summary>
+    public bool ClockUppercase { get; set; }
 
-    public ScreenSaverSettings ScreenSaver { get; set; } = new();
+    /// <summary>Color title bars, accent and selection highlight to match the classification.</summary>
+    public bool EnforceColors { get; set; } = true;
 
-    public LoggingSettings Logging { get; set; } = new();
+    public WallpaperMode WallpaperMode { get; set; } = WallpaperMode.Off;
+
+    public string? WallpaperImagePath { get; set; }
+
+    /// <summary>Set the Better Banner classification screen saver for every user.</summary>
+    public bool EnforceScreenSaver { get; set; }
+
+    public int ScreenSaverTimeoutSeconds { get; set; } = 600;
+
+    public bool ScreenSaverRequirePassword { get; set; } = true;
+
+    /// <summary>
+    /// Title of the Windows sign-in notice users must acknowledge before logging on. Applied by
+    /// <c>install</c>/<c>config</c> (machine-wide). Empty title and text means no notice.
+    /// </summary>
+    public string? LogonNoticeTitle { get; set; }
+
+    public string? LogonNoticeText { get; set; }
 
     [JsonIgnore]
     public ClassificationPreset Preset => ClassificationPresets.Get(Level);
@@ -91,94 +96,20 @@ public sealed class BannerSettings
     [JsonIgnore]
     public RgbColor EffectiveForeColor => RgbColor.TryParse(ForeColor, out var c) ? c : Preset.Foreground;
 
-    /// <summary>Clamps out-of-range values so bad policy data can never break the banner.</summary>
+    [JsonIgnore]
+    public bool HasLogonNotice => !string.IsNullOrWhiteSpace(LogonNoticeTitle) || !string.IsNullOrWhiteSpace(LogonNoticeText);
+
+    /// <summary>Clamps out-of-range values so bad policy or file data can never break the banner.</summary>
     public void Normalize()
     {
         if (!Enum.IsDefined(Level)) Level = ClassificationLevel.Unclassified;
         if (!Enum.IsDefined(Position)) Position = BannerPosition.Both;
-        if (FontSize != 0) FontSize = Math.Clamp(FontSize, 8, 36);
-        Transparency = Math.Clamp(Transparency, 0, 50);
+        if (!Enum.IsDefined(WallpaperMode)) WallpaperMode = WallpaperMode.Off;
+        FontSize = Math.Clamp(FontSize, 8, 36);
         HoverTransparency = Math.Clamp(HoverTransparency, 0, 90);
-        ExpansionDelimiter ??= "";
-        Clock ??= new();
-        WindowRecovery ??= new();
-        Colors ??= new();
-        Wallpaper ??= new();
-        ScreenSaver ??= new();
-        Logging ??= new();
-        WindowRecovery.DragCoveredWindowSeconds = Math.Clamp(WindowRecovery.DragCoveredWindowSeconds, 3, 60);
-        ScreenSaver.TimeoutSeconds = Math.Clamp(ScreenSaver.TimeoutSeconds, 60, 7200);
-        ScreenSaver.Speed = Math.Clamp(ScreenSaver.Speed, 1, 30);
-        if (!Enum.IsDefined(Wallpaper.Mode)) Wallpaper.Mode = WallpaperMode.Off;
-        if (!Enum.IsDefined(Wallpaper.Style)) Wallpaper.Style = WallpaperStyle.Fill;
+        ScreenSaverTimeoutSeconds = Math.Clamp(ScreenSaverTimeoutSeconds, 60, 7200);
+        if (string.IsNullOrWhiteSpace(ClockFormat)) ClockFormat = new BannerSettings().ClockFormat;
     }
-}
 
-public sealed class ClockSettings
-{
-    public bool Enabled { get; set; }
-
-    /// <summary>.NET date/time format. %TZI% is replaced by the local or Zulu indicator.</summary>
-    public string Format { get; set; } = "ddd, dd-MMM-yy HH:mm %TZI%";
-
-    /// <summary>Show UTC (Zulu) time instead of local time.</summary>
-    public bool UseZulu { get; set; }
-
-    public string LocalIndicator { get; set; } = "L";
-
-    public string ZuluIndicator { get; set; } = "Z";
-
-    /// <summary>Upper-case the result (military style: 071830Z OCT 26).</summary>
-    public bool Uppercase { get; set; }
-}
-
-public sealed class WindowRecoverySettings
-{
-    /// <summary>Cascade windows pulled out from under the banner instead of stacking them.</summary>
-    public bool CascadeRecoveredWindows { get; set; } = true;
-
-    /// <summary>Extra window classes (semicolon separated) that recovery must never move.</summary>
-    public string IgnoredWindowClasses { get; set; } = "";
-
-    /// <summary>How long "Drag Covered Window" lets clicks pass through the banner.</summary>
-    public int DragCoveredWindowSeconds { get; set; } = 8;
-}
-
-public sealed class ColorPolicySettings
-{
-    /// <summary>Color title bars, accent and selection highlight to match the classification at every logon.</summary>
-    public bool Enforce { get; set; } = true;
-}
-
-public sealed class WallpaperSettings
-{
-    public WallpaperMode Mode { get; set; } = WallpaperMode.Off;
-
-    /// <summary>Image file used when Mode is Image.</summary>
-    public string? ImagePath { get; set; }
-
-    public WallpaperStyle Style { get; set; } = WallpaperStyle.Fill;
-}
-
-public sealed class ScreenSaverSettings
-{
-    /// <summary>Set the Better Banner classification screen saver for every user at logon.</summary>
-    public bool Enforce { get; set; }
-
-    public int TimeoutSeconds { get; set; } = 600;
-
-    /// <summary>Require a password when the screen saver ends.</summary>
-    public bool RequirePassword { get; set; } = true;
-
-    /// <summary>Marquee scroll speed, 1 (slow) to 30 (fast).</summary>
-    public int Speed { get; set; } = 9;
-}
-
-public sealed class LoggingSettings
-{
-    /// <summary>Log recovered windows and policy actions. Handy for finding window classes to ignore.</summary>
-    public bool Enabled { get; set; }
-
-    /// <summary>Log file. Empty uses %LOCALAPPDATA%\BetterBanner\BetterBanner.log.</summary>
-    public string? FilePath { get; set; }
+    public BannerSettings Clone() => SettingsSerializer.Parse(SettingsSerializer.Serialize(this));
 }

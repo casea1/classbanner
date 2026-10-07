@@ -1,9 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Platform-independent logic (settings, layout, formatting) so it can be unit tested anywhere. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <RootNamespace>BetterBanner.Core</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
-  <ItemGroup>
-    <InternalsVisibleTo Include="BetterBanner.Core.Tests" />
-  </ItemGroup>
 </Project>

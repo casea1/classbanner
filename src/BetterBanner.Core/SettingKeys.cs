@@ -3,66 +3,45 @@ using System.Globalization;
 namespace BetterBanner.Core;
 
 /// <summary>
-/// Flat setting names shared by Group Policy (registry value names under HKLM\SOFTWARE\Policies\BetterBanner)
-/// and the command line (<c>--set Name=Value</c>). Keep in sync with policy/BetterBanner.admx.
+/// Setting names shared by Group Policy (value names under HKLM\SOFTWARE\Policies\BetterBanner) and the command line
+/// (<c>--set Name=Value</c>). Names match <see cref="BannerSettings"/> properties. Keep in sync with policy/BetterBanner.admx.
 /// </summary>
 public static class SettingKeys
 {
-    private sealed record Key(string Name, Func<BannerSettings, string, bool> Apply);
+    private static readonly Dictionary<string, Func<BannerSettings, string, bool>> Appliers =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(BannerSettings.Level)] = (s, v) => ClassificationPresets.TryParseLevel(v, out var l) && Set(() => s.Level = l),
+            [nameof(BannerSettings.Caption)] = (s, v) => Set(() => s.Caption = NullIfBlank(v)),
+            [nameof(BannerSettings.BackColor)] = (s, v) => TryColor(v, out var c) && Set(() => s.BackColor = c),
+            [nameof(BannerSettings.ForeColor)] = (s, v) => TryColor(v, out var c) && Set(() => s.ForeColor = c),
+            [nameof(BannerSettings.Position)] = (s, v) => TryEnum<BannerPosition>(v, out var p) && Set(() => s.Position = p),
+            [nameof(BannerSettings.FontSize)] = (s, v) => TryInt(v, out var i) && Set(() => s.FontSize = i),
+            [nameof(BannerSettings.HoverTransparency)] = (s, v) => TryInt(v, out var i) && Set(() => s.HoverTransparency = i),
+            [nameof(BannerSettings.StayAboveFullScreenApps)] = (s, v) => TryBool(v, out var b) && Set(() => s.StayAboveFullScreenApps = b),
+            [nameof(BannerSettings.AllowUserExit)] = (s, v) => TryBool(v, out var b) && Set(() => s.AllowUserExit = b),
+            [nameof(BannerSettings.ClockEnabled)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockEnabled = b),
+            [nameof(BannerSettings.ClockFormat)] = (s, v) => !string.IsNullOrWhiteSpace(v) && Set(() => s.ClockFormat = v),
+            [nameof(BannerSettings.ClockUseZulu)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockUseZulu = b),
+            [nameof(BannerSettings.ClockUppercase)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockUppercase = b),
+            [nameof(BannerSettings.EnforceColors)] = (s, v) => TryBool(v, out var b) && Set(() => s.EnforceColors = b),
+            [nameof(BannerSettings.WallpaperMode)] = (s, v) => TryEnum<WallpaperMode>(v, out var m) && Set(() => s.WallpaperMode = m),
+            [nameof(BannerSettings.WallpaperImagePath)] = (s, v) => Set(() => s.WallpaperImagePath = NullIfBlank(v)),
+            [nameof(BannerSettings.EnforceScreenSaver)] = (s, v) => TryBool(v, out var b) && Set(() => s.EnforceScreenSaver = b),
+            [nameof(BannerSettings.ScreenSaverTimeoutSeconds)] = (s, v) => TryInt(v, out var i) && Set(() => s.ScreenSaverTimeoutSeconds = i),
+            [nameof(BannerSettings.ScreenSaverRequirePassword)] = (s, v) => TryBool(v, out var b) && Set(() => s.ScreenSaverRequirePassword = b),
+            [nameof(BannerSettings.LogonNoticeTitle)] = (s, v) => Set(() => s.LogonNoticeTitle = NullIfBlank(v)),
+            [nameof(BannerSettings.LogonNoticeText)] = (s, v) => Set(() => s.LogonNoticeText = NullIfBlank(v)),
+        };
 
-    private static readonly Key[] Keys =
-    [
-        new("Level", (s, v) => Set(ClassificationPresets.TryParseLevel(v, out var l), () => s.Level = l)),
-        new("Caption", (s, v) => { s.Caption = NullIfEmpty(v); return true; }),
-        new("BackColor", (s, v) => SetColor(v, c => s.BackColor = c)),
-        new("ForeColor", (s, v) => SetColor(v, c => s.ForeColor = c)),
-        new("Position", (s, v) => SetEnum<BannerPosition>(v, p => s.Position = p)),
-        new("FontSize", (s, v) => SetInt(v, i => s.FontSize = i)),
-        new("ExpansionDelimiter", (s, v) => { s.ExpansionDelimiter = v; return true; }),
-        new("Transparency", (s, v) => SetInt(v, i => s.Transparency = i)),
-        new("HoverTransparency", (s, v) => SetInt(v, i => s.HoverTransparency = i)),
-        new("StayAboveFullScreenApps", (s, v) => SetBool(v, b => s.StayAboveFullScreenApps = b)),
-        new("AllowUserExit", (s, v) => SetBool(v, b => s.AllowUserExit = b)),
+    public static IReadOnlyCollection<string> Names => Appliers.Keys;
 
-        new("ClockEnabled", (s, v) => SetBool(v, b => s.Clock.Enabled = b)),
-        new("ClockFormat", (s, v) => { if (string.IsNullOrWhiteSpace(v)) return false; s.Clock.Format = v; return true; }),
-        new("ClockUseZulu", (s, v) => SetBool(v, b => s.Clock.UseZulu = b)),
-        new("ClockLocalIndicator", (s, v) => { s.Clock.LocalIndicator = v; return true; }),
-        new("ClockZuluIndicator", (s, v) => { s.Clock.ZuluIndicator = v; return true; }),
-        new("ClockUppercase", (s, v) => SetBool(v, b => s.Clock.Uppercase = b)),
+    /// <summary>Applies one value. Returns false, leaving settings untouched, for unknown names or invalid values.</summary>
+    public static bool TryApply(BannerSettings settings, string name, string value) =>
+        Appliers.TryGetValue(name, out var apply) && apply(settings, value);
 
-        new("CascadeRecoveredWindows", (s, v) => SetBool(v, b => s.WindowRecovery.CascadeRecoveredWindows = b)),
-        new("IgnoredWindowClasses", (s, v) => { s.WindowRecovery.IgnoredWindowClasses = v; return true; }),
-        new("DragCoveredWindowSeconds", (s, v) => SetInt(v, i => s.WindowRecovery.DragCoveredWindowSeconds = i)),
-
-        new("EnforceColors", (s, v) => SetBool(v, b => s.Colors.Enforce = b)),
-
-        new("WallpaperMode", (s, v) => SetEnum<WallpaperMode>(v, m => s.Wallpaper.Mode = m)),
-        new("WallpaperImagePath", (s, v) => { s.Wallpaper.ImagePath = NullIfEmpty(v); return true; }),
-        new("WallpaperStyle", (s, v) => SetEnum<WallpaperStyle>(v, w => s.Wallpaper.Style = w)),
-
-        new("EnforceScreenSaver", (s, v) => SetBool(v, b => s.ScreenSaver.Enforce = b)),
-        new("ScreenSaverTimeoutSeconds", (s, v) => SetInt(v, i => s.ScreenSaver.TimeoutSeconds = i)),
-        new("ScreenSaverRequirePassword", (s, v) => SetBool(v, b => s.ScreenSaver.RequirePassword = b)),
-        new("ScreenSaverSpeed", (s, v) => SetInt(v, i => s.ScreenSaver.Speed = i)),
-
-        new("LoggingEnabled", (s, v) => SetBool(v, b => s.Logging.Enabled = b)),
-        new("LogFilePath", (s, v) => { s.Logging.FilePath = NullIfEmpty(v); return true; }),
-    ];
-
-    private static readonly Dictionary<string, Key> ByName =
-        Keys.ToDictionary(k => k.Name, StringComparer.OrdinalIgnoreCase);
-
-    public static IReadOnlyCollection<string> Names { get; } = Keys.Select(k => k.Name).ToArray();
-
-    public static bool IsKnown(string name) => ByName.ContainsKey(name);
-
-    /// <summary>Applies one value. Returns false (leaving settings untouched) for unknown names or unparseable values.</summary>
-    public static bool TryApply(BannerSettings settings, string name, string? value) =>
-        value is not null && ByName.TryGetValue(name, out var key) && key.Apply(settings, value);
-
-    /// <summary>Applies a set of values; returns the names that were rejected.</summary>
-    public static IReadOnlyList<string> ApplyAll(BannerSettings settings, IEnumerable<KeyValuePair<string, string?>> values)
+    /// <summary>Applies values in order, then normalizes. Returns the names that were rejected.</summary>
+    public static IReadOnlyList<string> ApplyAll(BannerSettings settings, IEnumerable<KeyValuePair<string, string>> values)
     {
         var rejected = new List<string>();
         foreach (var (name, value) in values)
@@ -73,7 +52,7 @@ public static class SettingKeys
         return rejected;
     }
 
-    internal static bool TryParseBool(string v, out bool result)
+    public static bool TryBool(string v, out bool result)
     {
         switch (v.Trim().ToLowerInvariant())
         {
@@ -83,34 +62,27 @@ public static class SettingKeys
         }
     }
 
-    private static bool Set(bool ok, Action apply)
+    private static bool Set(Action apply)
     {
-        if (ok) apply();
-        return ok;
+        apply();
+        return true;
     }
 
-    private static bool SetBool(string v, Action<bool> apply) => Set(TryParseBool(v, out var b), () => apply(b));
+    private static bool TryInt(string v, out int i) =>
+        int.TryParse(v.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out i);
 
-    private static bool SetInt(string v, Action<int> apply) =>
-        Set(int.TryParse(v.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var i), () => apply(i));
+    private static bool TryEnum<T>(string v, out T value) where T : struct, Enum =>
+        Enum.TryParse(v.Trim(), ignoreCase: true, out value) && Enum.IsDefined(value);
 
-    private static bool SetEnum<T>(string v, Action<T> apply) where T : struct, Enum
+    /// <summary>Blank clears the override (back to the level's standard color).</summary>
+    private static bool TryColor(string v, out string? color)
     {
-        var t = v.Trim();
-        // Numeric values must be defined members; Enum.TryParse would accept any number.
-        var ok = Enum.TryParse<T>(t, ignoreCase: true, out var e) && Enum.IsDefined(e);
-        return Set(ok, () => apply(e));
+        color = null;
+        if (string.IsNullOrWhiteSpace(v)) return true;
+        if (!RgbColor.TryParse(v, out var c)) return false;
+        color = c.ToString();
+        return true;
     }
 
-    private static bool SetColor(string v, Action<string?> apply)
-    {
-        if (string.IsNullOrWhiteSpace(v))
-        {
-            apply(null);
-            return true;
-        }
-        return Set(RgbColor.TryParse(v, out var c), () => apply(c.ToString()));
-    }
-
-    private static string? NullIfEmpty(string v) => string.IsNullOrWhiteSpace(v) ? null : v;
+    private static string? NullIfBlank(string v) => string.IsNullOrWhiteSpace(v) ? null : v;
 }

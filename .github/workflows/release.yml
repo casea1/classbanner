@@ -1,0 +1,65 @@
+name: Release
+
+# Push a tag like v1.2.0 to build, test and publish a GitHub Release.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Publish native exe
+        run: >-
+          dotnet publish src/BetterBanner/BetterBanner.csproj -c Release -o publish
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:SourceRevisionId=${{ github.sha }}
+
+      - name: Smoke test
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $v = '${{ steps.version.outputs.version }}'
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item publish/BetterBanner.exe dist/BetterBanner.exe
+          Compress-Archive -Path policy/* -DestinationPath "dist/BetterBanner-$v-GroupPolicy.zip"
+          Get-ChildItem dist -File | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content dist/SHA256SUMS.txt -Encoding ascii
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $prerelease = if ($tag -match '-') { '--prerelease' } else { $null }
+          gh release create $tag (Get-ChildItem dist -File).FullName --title "Better Banner $tag" --generate-notes --verify-tag $prerelease
