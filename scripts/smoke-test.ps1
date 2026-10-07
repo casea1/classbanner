@@ -16,7 +16,12 @@ function Invoke-Banner([string[]] $Arguments) {
     $p = Start-Process -FilePath $Exe -ArgumentList $commandLine -Wait -PassThru -NoNewWindow
     if ($p.ExitCode -ne 0) { throw "BetterBanner $($Arguments -join ' ') exited with $($p.ExitCode)" }
 }
-function Assert($Condition, [string] $Message) { if (-not $Condition) { throw "FAILED: $Message" } else { Write-Host "ok - $Message" } }
+function Assert($Condition, [string] $Message) {
+    if ($Condition) { Write-Host "ok - $Message"; return }
+    Write-Host "--- BetterBanner.log ---"
+    if (Test-Path $log) { Get-Content $log | Write-Host } else { Write-Host '(no log)' }
+    throw "FAILED: $Message"
+}
 
 $size = (Get-Item $Exe).Length / 1MB
 Write-Host ("BetterBanner.exe is {0:N2} MB" -f $size)
@@ -46,6 +51,7 @@ Invoke-Banner @('show')
 # Settings window opens and stays up until closed.
 $settingsWindow = Start-Process -FilePath "$installDir\BetterBanner.exe" -ArgumentList 'settings' -PassThru
 Start-Sleep -Seconds 3
+if ($settingsWindow.HasExited) { Write-Host "settings exited with code $($settingsWindow.ExitCode)" }
 Assert (-not $settingsWindow.HasExited) 'settings window opens'
 Stop-Process -Id $settingsWindow.Id
 
