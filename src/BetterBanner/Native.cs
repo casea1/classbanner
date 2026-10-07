@@ -527,7 +527,7 @@ internal static unsafe partial class Native
     public const uint LR_DEFAULTCOLOR = 0;
     public const uint IMAGE_ICON = 1;
 
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint CreateChildWindow(uint exStyle, string className, string? windowName, uint style,
         int x, int y, int width, int height, nint parent, nint id, nint instance, nint param);
 
