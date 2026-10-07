@@ -28,13 +28,24 @@ Assert (Test-Path "$installDir\BetterBanner.exe") 'exe installed'
 Assert (Test-Path "$installDir\BetterBanner.scr") 'screen saver installed'
 $run = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
 Assert ($run.BetterBanner -like '*BetterBanner.exe*') 'starts at sign-in'
-Assert (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BetterBanner') 'listed in Apps & features'
+$uninstall = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BetterBanner'
+Assert ($uninstall.Publisher -eq 'Austin Case') 'listed in Apps & features with publisher'
+$cpl = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}'
+Assert (Test-Path $cpl) 'registered in Control Panel'
+$cplCommand = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\CLSID\{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}\Shell\Open\Command').'(default)'
+Assert ($cplCommand -like '*BetterBanner.exe" settings') 'Control Panel opens the settings window'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ($notice.legalnoticetext -eq 'Authorized use only') 'sign-in notice set'
 $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
 Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN') 'settings saved'
 
 Invoke-Banner @('show')
+
+# Settings window opens and stays up until closed.
+$settingsWindow = Start-Process -FilePath "$installDir\BetterBanner.exe" -ArgumentList 'settings' -PassThru
+Start-Sleep -Seconds 3
+Assert (-not $settingsWindow.HasExited) 'settings window opens'
+Stop-Process -Id $settingsWindow.Id
 
 if (Test-Path $log) { Remove-Item $log }
 $banner = Start-Process -FilePath "$installDir\BetterBanner.exe" -PassThru
@@ -53,5 +64,6 @@ Assert (-not (Test-Path $settingsFile)) 'settings removed'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) 'sign-in notice cleared'
 Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').BetterBanner) 'no longer starts at sign-in'
+Assert (-not (Test-Path $cpl)) 'removed from Control Panel'
 
 Write-Host 'Smoke test passed.'

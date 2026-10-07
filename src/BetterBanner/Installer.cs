@@ -15,6 +15,12 @@ internal static class Installer
     private const string UninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BetterBanner";
     private const string StateKey = @"SOFTWARE\BetterBanner";
     private const string LogonNoticeKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
+    private const string Publisher = "Austin Case";
+
+    // Control Panel item (an exe-based "command object" item).
+    private const string ControlPanelClsid = "{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}";
+    private const string ClsidKey = @"SOFTWARE\Classes\CLSID\" + ControlPanelClsid;
+    private const string ControlPanelNamespaceKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\" + ControlPanelClsid;
 
     private static string InstallDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), AppName);
     private static string InstalledExe => Path.Combine(InstallDir, "BetterBanner.exe");
@@ -40,16 +46,17 @@ internal static class Installer
         {
             uninstall.SetValue("DisplayName", "Better Banner");
             uninstall.SetValue("DisplayVersion", AppInfo.Version);
-            uninstall.SetValue("Publisher", "Better Banner");
+            uninstall.SetValue("Publisher", Publisher);
             uninstall.SetValue("InstallLocation", InstallDir);
             uninstall.SetValue("DisplayIcon", InstalledExe);
             uninstall.SetValue("UninstallString", $"\"{InstalledExe}\" uninstall");
             uninstall.SetValue("QuietUninstallString", $"\"{InstalledExe}\" uninstall --quiet");
-            uninstall.SetValue("NoModify", 1, RegistryValueKind.DWord);
+            uninstall.SetValue("ModifyPath", $"\"{InstalledExe}\" settings");
             uninstall.SetValue("NoRepair", 1, RegistryValueKind.DWord);
             uninstall.SetValue("EstimatedSize", (int)Math.Max(1, new FileInfo(InstalledExe).Length / 1024), RegistryValueKind.DWord);
         }
 
+        RegisterControlPanelItem();
         ApplyLogonNotice(settings, output);
 
         if (!cmd.NoStart) StartForCurrentUser();
@@ -79,6 +86,8 @@ internal static class Installer
         StopRunningBanners();
         using (var run = Registry.LocalMachine.OpenSubKey(RunKey, writable: true)) run?.DeleteValue(AppName, throwOnMissingValue: false);
         Registry.LocalMachine.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false);
+        Registry.LocalMachine.DeleteSubKeyTree(ControlPanelNamespaceKey, throwOnMissingSubKey: false);
+        Registry.LocalMachine.DeleteSubKeyTree(ClsidKey, throwOnMissingSubKey: false);
         RemoveLogonNoticeIfOurs(output);
         Registry.LocalMachine.DeleteSubKeyTree(StateKey, throwOnMissingSubKey: false);
 
@@ -119,6 +128,25 @@ internal static class Installer
         output.Line("");
         output.Line(SettingsSerializer.Serialize(loaded.Settings));
         return ExitCodes.Ok;
+    }
+
+    /// <summary>Adds "Better Banner" to Control Panel (Appearance and Personalization; System and Security).</summary>
+    private static void RegisterControlPanelItem()
+    {
+        using (var clsid = Registry.LocalMachine.CreateSubKey(ClsidKey))
+        {
+            clsid.SetValue("", "Better Banner");
+            clsid.SetValue("LocalizedString", "Better Banner");
+            clsid.SetValue("InfoTip", "Classification banner, sign-in notice and related settings for this computer.");
+            clsid.SetValue("System.ApplicationName", "AustinCase.BetterBanner");
+            clsid.SetValue("System.ControlPanel.Category", "1,5");
+            using (var icon = clsid.CreateSubKey("DefaultIcon"))
+                icon.SetValue("", $"\"{InstalledExe}\",0");
+            using (var command = clsid.CreateSubKey(@"Shell\Open\Command"))
+                command.SetValue("", $"\"{InstalledExe}\" settings", RegistryValueKind.ExpandString);
+        }
+        using (var ns = Registry.LocalMachine.CreateSubKey(ControlPanelNamespaceKey))
+            ns.SetValue("", "Better Banner");
     }
 
     private static BannerSettings UpdateSettingsFile(ParsedCommand cmd)

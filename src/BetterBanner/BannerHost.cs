@@ -28,6 +28,7 @@ internal sealed unsafe class BannerHost : Win32Window
     private const uint MenuRecover = 1;
     private const uint MenuAbout = 2;
     private const uint MenuExit = 3;
+    private const uint MenuSettings = 4;
 
     private static List<nint>? _enumerated;
 
@@ -243,6 +244,7 @@ internal sealed unsafe class BannerHost : Win32Window
         {
             AppendMenuW(menu, MF_STRING, MenuRecover, "&Recover hidden windows");
             AppendMenuW(menu, MF_SEPARATOR, 0, null);
+            AppendMenuW(menu, MF_STRING, MenuSettings, "&Settings...");
             AppendMenuW(menu, MF_STRING, MenuAbout, "&About Better Banner");
             if (Settings.AllowUserExit)
             {
@@ -259,12 +261,25 @@ internal sealed unsafe class BannerHost : Win32Window
             {
                 case MenuRecover: RecoverWindows(); break;
                 case MenuAbout: ShowAbout(); break;
+                case MenuSettings: OpenSettings(); break;
                 case MenuExit: Destroy(); break;
             }
         }
         finally
         {
             DestroyMenu(menu);
+        }
+    }
+
+    private static void OpenSettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, "settings") { UseShellExecute = false });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Could not open settings", ex);
         }
     }
 

@@ -17,9 +17,9 @@ internal abstract unsafe class Win32Window
 
     public bool IsAlive => Handle != 0;
 
-    protected void CreateWindow(string className, uint classStyle, uint exStyle, uint style, int x, int y, int width, int height)
+    protected void CreateWindow(string className, uint classStyle, uint exStyle, uint style, int x, int y, int width, int height, nint background = 0)
     {
-        RegisterClass(className, classStyle);
+        RegisterClass(className, classStyle, background);
         _creating = this;
         try
         {
@@ -46,7 +46,7 @@ internal abstract unsafe class Win32Window
     {
     }
 
-    private static void RegisterClass(string className, uint classStyle)
+    private static void RegisterClass(string className, uint classStyle, nint background)
     {
         if (RegisteredClasses.Contains(className)) return;
         fixed (char* name = className)
@@ -58,6 +58,9 @@ internal abstract unsafe class Win32Window
                 lpfnWndProc = &StaticWndProc,
                 hInstance = GetModuleHandleW(null),
                 hCursor = LoadCursorW(0, IDC_ARROW),
+                hIcon = LoadAppIcon(32),
+                hIconSm = LoadAppIcon(16),
+                hbrBackground = background,
                 lpszClassName = name,
             };
             if (RegisterClassExW(wc) == 0) throw new Win32Exception(Marshal.GetLastPInvokeError(), $"RegisterClassEx({className}) failed");
@@ -97,14 +100,15 @@ internal abstract unsafe class Win32Window
         }
     }
 
-    /// <summary>Runs the message loop until PostQuitMessage.</summary>
-    public static int RunMessageLoop()
+    /// <summary>Runs the message loop until PostQuitMessage. Pass a window to get Tab/Enter/Esc dialog navigation.</summary>
+    public static int RunMessageLoop(nint dialog = 0)
     {
         while (true)
         {
             var result = GetMessageW(out var msg, 0, 0, 0);
             if (result == 0) return (int)msg.wParam;
             if (result == -1) return 1;
+            if (dialog != 0 && IsDialogMessageW(dialog, ref msg)) continue;
             TranslateMessage(msg);
             DispatchMessageW(msg);
         }

@@ -6,6 +6,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>BetterBanner.ico</ApplicationIcon>
     <AssemblyTitle>Better Banner</AssemblyTitle>
     <Description>Classification banner for Windows</Description>
     <!-- Builds on Linux too (compile check only; the native exe is produced on Windows CI). -->

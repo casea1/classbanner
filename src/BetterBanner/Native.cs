@@ -489,6 +489,104 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AttachConsole(int processId);
 
+    // ---- settings window (standard controls) ----
+    public const uint WS_OVERLAPPED = 0x00000000;
+    public const uint WS_SYSMENU = 0x00080000;
+    public const uint WS_MINIMIZEBOX = 0x00020000;
+    public const uint WS_CHILD = 0x40000000;
+    public const uint WS_TABSTOP = 0x00010000;
+    public const uint WS_VSCROLL = 0x00200000;
+    public const uint WS_EX_CLIENTEDGE = 0x00000200;
+    public const uint WS_EX_CONTROLPARENT = 0x00010000;
+    public const uint ES_AUTOHSCROLL = 0x0080;
+    public const uint ES_MULTILINE = 0x0004;
+    public const uint ES_WANTRETURN = 0x1000;
+    public const uint ES_NUMBER = 0x2000;
+    public const uint CBS_DROPDOWNLIST = 0x0003;
+    public const uint BS_PUSHBUTTON = 0x0000;
+    public const uint BS_DEFPUSHBUTTON = 0x0001;
+    public const uint BS_AUTOCHECKBOX = 0x0003;
+    public const uint SS_LEFT = 0x0000;
+    public const uint WM_SETFONT = 0x0030;
+    public const uint WM_COMMAND = 0x0111;
+    public const uint BM_GETCHECK = 0x00F0;
+    public const uint BM_SETCHECK = 0x00F1;
+    public const uint CB_ADDSTRING = 0x0143;
+    public const uint CB_GETCURSEL = 0x0147;
+    public const uint CB_SETCURSEL = 0x014E;
+    public const uint EM_SETCUEBANNER = 0x1501;
+    public const int BN_CLICKED = 0;
+    public const int CBN_SELCHANGE = 1;
+    public const int EN_CHANGE = 0x0300;
+    public const int COLOR_BTNFACE = 15;
+    public const int SW_SHOWNORMAL = 1;
+    public const nint IDI_APPLICATION_RESOURCE = 32512;
+    public const uint ICON_SMALL = 0;
+    public const uint ICON_BIG = 1;
+    public const uint WM_SETICON = 0x0080;
+    public const uint LR_DEFAULTCOLOR = 0;
+    public const uint IMAGE_ICON = 1;
+
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint CreateChildWindow(uint exStyle, string className, string? windowName, uint style,
+        int x, int y, int width, int height, nint parent, nint id, nint instance, nint param);
+
+    [LibraryImport("user32.dll", EntryPoint = "SendMessageW")]
+    public static partial nint SendMessage(nint hwnd, uint msg, nint wParam, nint lParam);
+
+    [LibraryImport("user32.dll", EntryPoint = "SendMessageW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint SendMessageString(nint hwnd, uint msg, nint wParam, string lParam);
+
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowTextW(nint hwnd, string text);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetWindowTextLengthW(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetWindowTextW(nint hwnd, char* buffer, int max);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EnableWindow(nint hwnd, [MarshalAs(UnmanagedType.Bool)] bool enable);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsDialogMessageW(nint hwnd, ref MSG msg);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AdjustWindowRectExForDpi(ref RECT rect, uint style, [MarshalAs(UnmanagedType.Bool)] bool menu, uint exStyle, uint dpi);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint MonitorFromPoint(POINT point, uint flags);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint LoadImageW(nint instance, nint name, uint type, int cx, int cy, uint load);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetSystemMetricsForDpi(int index, uint dpi);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetSysColorBrush(int index);
+
+    public static string GetWindowText(nint hwnd)
+    {
+        var length = GetWindowTextLengthW(hwnd);
+        if (length <= 0) return "";
+        var buffer = new char[length + 1];
+        fixed (char* p = buffer)
+        {
+            var copied = GetWindowTextW(hwnd, p, buffer.Length);
+            return new string(p, 0, copied);
+        }
+    }
+
+    /// <summary>The app icon embedded in the exe (resource 32512), sized for a DPI-aware window.</summary>
+    public static nint LoadAppIcon(int size) =>
+        LoadImageW(GetModuleHandleW(null), IDI_APPLICATION_RESOURCE, IMAGE_ICON, size, size, LR_DEFAULTCOLOR);
+
     // ---- helpers ----
     public static int LowWord(nint value) => (short)((long)value & 0xFFFF);
     public static int HighWord(nint value) => (short)(((long)value >> 16) & 0xFFFF);

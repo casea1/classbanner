@@ -19,6 +19,7 @@ internal static class Program
                 CommandKind.ScreenSaverShow => ScreenSaver.Run(),
                 CommandKind.ScreenSaverPreview => ExitCodes.Ok, // no preview in the Control Panel thumbnail
                 CommandKind.ScreenSaverConfigure => ShowScreenSaverInfo(),
+                CommandKind.Settings => SettingsWindow.Run(),
                 _ => RunCommand(cmd),
             };
         }

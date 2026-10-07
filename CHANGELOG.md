@@ -17,5 +17,8 @@ All notable changes to this project are documented here. The format follows
 - Settings file with Group Policy overrides (ADMX/ADML templates).
 - Optional sign-in notice, clock (local/Zulu), title bar and highlight colors, generated or custom wallpaper, and
   classification screen saver.
+- Control Panel item and settings window with live preview; Group Policy-managed settings shown locked; saving
+  elevates with a UAC prompt. "Change" in Apps & features opens the same window.
+- Logo and app icon.
 - Window recovery (double-click a banner) for windows hidden under a banner or off-screen.
 - CI on Windows with unit and end-to-end smoke tests; tag-driven GitHub Releases with checksums.

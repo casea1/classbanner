@@ -5,7 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Version>1.0.0</Version>
-    <Company>better-banner</Company>
+    <Company>Austin Case</Company>
+    <Authors>Austin Case</Authors>
+    <Copyright>Copyright © Austin Case</Copyright>
     <Product>Better Banner</Product>
   </PropertyGroup>
 </Project>

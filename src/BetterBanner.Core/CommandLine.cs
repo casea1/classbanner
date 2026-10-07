@@ -8,6 +8,7 @@ public enum CommandKind
     Uninstall,
     Config,
     Show,
+    Settings,
     Help,
     Version,
     ScreenSaverShow,
@@ -33,6 +34,7 @@ public static class CommandLine
           BetterBanner.exe                        Show the banner (normally started automatically at sign-in)
           BetterBanner.exe install [options]      Install for all users (run as administrator)
           BetterBanner.exe config [options]       Change machine settings (run as administrator)
+          BetterBanner.exe settings               Open the settings window (also in Control Panel)
           BetterBanner.exe show                   Print the effective settings
           BetterBanner.exe uninstall [--keep-settings] [--quiet]
           BetterBanner.exe version
@@ -75,6 +77,7 @@ public static class CommandLine
             "uninstall" => CommandKind.Uninstall,
             "config" or "configure" => CommandKind.Config,
             "show" or "status" => CommandKind.Show,
+            "settings" => CommandKind.Settings,
             "help" or "-h" or "--help" or "-?" => CommandKind.Help,
             "version" or "--version" => CommandKind.Version,
             _ => (CommandKind?)null,
@@ -145,4 +148,35 @@ public static class CommandLine
     }
 
     private static ParsedCommand Fail(string error) => new(CommandKind.Help, [], Error: error);
+
+    /// <summary>Builds a Windows command line that CommandLineToArgvW / the C runtime split back into exactly <paramref name="args"/>.</summary>
+    public static string Join(IEnumerable<string> args) => string.Join(' ', args.Select(Quote));
+
+    /// <summary>Quotes one argument using the Windows rules (backslashes only matter before a quote).</summary>
+    public static string Quote(string arg)
+    {
+        if (arg.Length > 0 && arg.IndexOfAny([' ', '\t', '\n', '\r', '"']) < 0) return arg;
+
+        var sb = new System.Text.StringBuilder("\"");
+        var backslashes = 0;
+        foreach (var c in arg)
+        {
+            if (c == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+            if (c == '"')
+            {
+                sb.Append('\\', backslashes * 2 + 1).Append('"');
+            }
+            else
+            {
+                sb.Append('\\', backslashes).Append(c);
+            }
+            backslashes = 0;
+        }
+        sb.Append('\\', backslashes * 2).Append('"');
+        return sb.ToString();
+    }
 }

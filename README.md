@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.svg" width="128" alt="Better Banner logo"></p>
+
 # Better Banner
 
 A classification banner for Windows 10 and 11. It keeps the system's marking (UNCLASSIFIED, CUI, CONFIDENTIAL,
@@ -13,6 +15,9 @@ display scaling. It replaces the USAF *Banner 3.1* (2003); see [docs/banner-3.1-
   screen after unlock" problem.
 - **Standard markings and colors**, with optional custom text such as `SECRET//NOFORN`.
 - **Sign-in notice.** Optionally shows a message users must acknowledge before they can sign in.
+- **In Control Panel.** *Better Banner* appears in Control Panel (Appearance and Personalization, and System and
+  Security) and in *Apps & features*. It opens a settings window with a live preview; settings enforced by Group
+  Policy are shown locked.
 - **Optional extras:** clock (local or Zulu), classification-colored title bars and highlights, wallpaper, and a
   classification screen saver.
 
@@ -42,8 +47,11 @@ start /wait BetterBanner.exe install --level SECRET
 ```
 
 This copies the program to `C:\Program Files\BetterBanner`, saves settings to
-`C:\ProgramData\BetterBanner\settings.json` (only administrators can change it), adds it to *Apps & features*, starts
-it for every user at sign-in, and starts it now for you.
+`C:\ProgramData\BetterBanner\settings.json` (only administrators can change it), adds it to Control Panel and
+*Apps & features*, starts it for every user at sign-in, and starts it now for you.
+
+After that, change settings from **Control Panel > Better Banner**, from the banner's right-click menu
+(*Settings...*), or from the command line. Saving asks for administrator approval.
 
 More examples:
 
@@ -117,7 +125,8 @@ Settings come from built-in defaults, then `settings.json`, then Group Policy
 ## Using the banner
 
 - **Double-click** a banner to bring back windows whose title bar is hidden under it or off-screen.
-- **Right-click** for *Recover hidden windows* and *About* (which shows the marking and where settings came from).
+- **Right-click** for *Recover hidden windows*, *Settings...* and *About* (which shows the marking and where
+  settings came from).
 - Hover over a banner to see through it.
 - Log: `%LOCALAPPDATA%\BetterBanner\BetterBanner.log`.
 
@@ -138,6 +147,7 @@ src/BetterBanner        Win32 app: banner windows, app-bar docking, policies, sc
 tests/                  xUnit tests
 policy/                 Group Policy ADMX/ADML templates
 scripts/smoke-test.ps1  end-to-end install/run/uninstall test used by CI
+assets/                 logo (SVG/PNG); tools/icon/make_icon.py regenerates it and the app icon
 ```
 
 ### CI and releases
@@ -156,3 +166,7 @@ scripts/smoke-test.ps1  end-to-end install/run/uninstall test used by CI
   `BetterBanner.exe`, the Group Policy templates zip and `SHA256SUMS.txt`. Tags with a suffix (e.g. `v1.1.0-rc.1`)
   become pre-releases.
 - Dependabot keeps NuGet packages and GitHub Actions up to date.
+
+## License
+
+Copyright © Austin Case. All rights reserved.

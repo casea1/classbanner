@@ -129,3 +129,77 @@ public class CommandLineTests
         Assert.NotNull(CommandLine.Parse(["uninstall", "--level", "S"]).Error);
     }
 }
+
+public class ArgumentQuotingTests
+{
+    /// <summary>Reference splitter following the documented MSVC/CommandLineToArgvW rules.</summary>
+    private static List<string> Split(string commandLine)
+    {
+        var args = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+        var hasArg = false;
+        for (var i = 0; i < commandLine.Length; i++)
+        {
+            var c = commandLine[i];
+            if (c == '\\')
+            {
+                var n = 0;
+                while (i < commandLine.Length && commandLine[i] == '\\') { n++; i++; }
+                if (i < commandLine.Length && commandLine[i] == '"')
+                {
+                    current.Append('\\', n / 2);
+                    if (n % 2 == 1) current.Append('"');
+                    else { inQuotes = !inQuotes; }
+                }
+                else
+                {
+                    current.Append('\\', n);
+                    i--;
+                }
+                hasArg = true;
+            }
+            else if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                hasArg = true;
+            }
+            else if (!inQuotes && (c == ' ' || c == '\t'))
+            {
+                if (hasArg) args.Add(current.ToString());
+                current.Clear();
+                hasArg = false;
+            }
+            else
+            {
+                current.Append(c);
+                hasArg = true;
+            }
+        }
+        if (hasArg) args.Add(current.ToString());
+        return args;
+    }
+
+    [Theory]
+    [InlineData("simple")]
+    [InlineData("")]
+    [InlineData("with space")]
+    [InlineData("SECRET//NOFORN")]
+    [InlineData("say \"hi\"")]
+    [InlineData(@"C:\path with space\")]
+    [InlineData(@"trailing\\")]
+    [InlineData(@"a\\""b")]
+    [InlineData("multi\r\nline notice")]
+    [InlineData("LogonNoticeText=This system is approved for SECRET. \"Authorized\" use only.")]
+    public void Quoted_arguments_round_trip(string value)
+    {
+        var args = new[] { "config", "--set", value, "--quiet" };
+        Assert.Equal(args, Split(CommandLine.Join(args)));
+    }
+
+    [Fact]
+    public void Settings_command_parses()
+    {
+        Assert.Equal(CommandKind.Settings, CommandLine.Parse(["settings"]).Kind);
+    }
+}
