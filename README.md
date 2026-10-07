@@ -156,7 +156,8 @@ assets/                 logo (SVG/PNG); tools/icon/make_icon.py regenerates it a
   tests, publish the native exe, then an end-to-end smoke test. The test installs the exe, checks files, registry and
   settings, runs the banner, checks only one copy can run, then uninstalls and checks cleanup. The exe is uploaded as
   a build artifact.
-- **Releases**: update `CHANGELOG.md`, then tag and push:
+- **Releases**: update `CHANGELOG.md`, then either open **Actions > Release > Run workflow** and enter a version
+  (e.g. `1.0.0`), or tag and push:
 
   ```sh
   git tag v1.0.0 && git push origin v1.0.0

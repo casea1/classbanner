@@ -1,9 +1,15 @@
 name: Release
 
-# Push a tag like v1.2.0 to build, test and publish a GitHub Release.
+# Publish a GitHub Release, either by pushing a tag like v1.2.0, or from the Actions tab
+# ("Release" > "Run workflow"), which creates the tag on the selected branch's latest commit.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 1.2.0 or 1.2.0-beta.1 (a suffix makes it a pre-release)'
+        required: true
 
 permissions:
   contents: write
@@ -23,12 +29,16 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Version from tag
+      - name: Version
         id: version
         shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { $env:INPUT_VERSION.Trim().TrimStart('v') } else { '${{ github.ref_name }}'.TrimStart('v') }
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "'$version' is not a valid version (expected e.g. 1.2.0 or 1.2.0-beta.1)." }
           "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
 
       - name: Test
         run: dotnet test -c Release
@@ -60,6 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = '${{ github.ref_name }}'
+          $tag = '${{ steps.version.outputs.tag }}'
           $prerelease = if ($tag -match '-') { '--prerelease' } else { $null }
-          gh release create $tag (Get-ChildItem dist -File).FullName --title "Better Banner $tag" --generate-notes --verify-tag $prerelease
+          # For a pushed tag the tag exists; for "Run workflow" gh creates it on the built commit.
+          gh release create $tag (Get-ChildItem dist -File).FullName --title "Better Banner $tag" --generate-notes --target $env:GITHUB_SHA $prerelease
