@@ -56,7 +56,28 @@ public static partial class CommandLine
           --no-start                      Don't start the banner after installing
           --quiet                         No output except errors
 
+        Values can also be written --option=value (e.g. --logon-text="-- Authorized use only --").
+
         Group Policy settings (HKLM\SOFTWARE\Policies\BetterBanner) override these.
+        """;
+
+    /// <summary>The same help laid out for a message box (proportional font, no column alignment).</summary>
+    public const string DialogUsage = """
+        Better Banner - classification banner for Windows
+
+        BetterBanner.exe install --level <level> [options]
+            Install for all users. Levels: U, CUI, C, S, TS, TS/SCI.
+        BetterBanner.exe config [options]
+            Change this computer's settings.
+        BetterBanner.exe settings
+            Open the settings window (also in Control Panel).
+        BetterBanner.exe show
+            Print the settings in effect.
+        BetterBanner.exe uninstall [--keep-settings]
+
+        Options: --level, --caption <text>, --position top|bottom|both, --clock on|off, --zulu, --logon-title <text>, --logon-text <text>, --set Name=Value, --no-start, --quiet.
+
+        Run from a command prompt to see full help. Group Policy settings override these.
         """;
 
     public static ParsedCommand Parse(IReadOnlyList<string> args)
@@ -95,11 +116,22 @@ public static partial class CommandLine
 
         for (var i = 1; i < args.Count; i++)
         {
+            // "--option=value" is always unambiguous; "--option value" also works.
             var arg = args[i];
-            // A value can't be another option: "--caption --quiet" is a missing caption, not the caption "--quiet".
+            string? inlineValue = null;
+            var eqIndex = arg.IndexOf('=');
+            if (arg.StartsWith("--", StringComparison.Ordinal) && eqIndex > 2 && IsOption(arg[..eqIndex]))
+            {
+                inlineValue = arg[(eqIndex + 1)..];
+                arg = arg[..eqIndex];
+            }
+
+            // The next argument is a missing value only if it is one of our own options, so "--caption --quiet" is an
+            // error but "--logon-text \"-- Authorized use only --\"" is fine.
             string? Next()
             {
-                if (i + 1 >= args.Count || args[i + 1].StartsWith("--", StringComparison.Ordinal)) return null;
+                if (inlineValue is not null) return inlineValue;
+                if (i + 1 >= args.Count || IsOption(args[i + 1])) return null;
                 return args[++i];
             }
 
@@ -107,6 +139,12 @@ public static partial class CommandLine
             {
                 if (value is null) throw new ArgumentException($"{arg} needs a value.");
                 settings.Add(new(key, value));
+            }
+
+            void Flag(ref bool flag)
+            {
+                if (inlineValue is not null) throw new ArgumentException($"{arg} doesn't take a value.");
+                flag = true;
             }
 
             try
@@ -117,7 +155,7 @@ public static partial class CommandLine
                     case "--caption": Add(nameof(BannerSettings.Caption), Next()); break;
                     case "--position": Add(nameof(BannerSettings.Position), Next()); break;
                     case "--clock": Add(nameof(BannerSettings.ClockEnabled), Next()); break;
-                    case "--zulu": Add(nameof(BannerSettings.ClockUseZulu), "1"); break;
+                    case "--zulu": Add(nameof(BannerSettings.ClockUseZulu), inlineValue ?? "1"); break;
                     case "--logon-title": Add(nameof(BannerSettings.LogonNoticeTitle), Next()); break;
                     case "--logon-text": Add(nameof(BannerSettings.LogonNoticeText), Next()); break;
                     case "--set":
@@ -126,9 +164,9 @@ public static partial class CommandLine
                         if (eq <= 0) throw new ArgumentException($"--set expects Name=Value, got '{pair}'.");
                         settings.Add(new(pair[..eq].Trim(), pair[(eq + 1)..]));
                         break;
-                    case "--quiet": case "-q": quiet = true; break;
-                    case "--no-start": noStart = true; break;
-                    case "--keep-settings": keepSettings = true; break;
+                    case "--quiet": case "-q": Flag(ref quiet); break;
+                    case "--no-start": Flag(ref noStart); break;
+                    case "--keep-settings": Flag(ref keepSettings); break;
                     default: return Fail($"Unknown option '{arg}'.");
                 }
             }
@@ -155,6 +193,19 @@ public static partial class CommandLine
     }
 
     private static ParsedCommand Fail(string error) => new(CommandKind.Help, [], Error: error);
+
+    private static readonly HashSet<string> Options = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--level", "--caption", "--position", "--clock", "--zulu", "--logon-title", "--logon-text", "--set",
+        "--quiet", "-q", "--no-start", "--keep-settings",
+    };
+
+    /// <summary>True for our own options, alone or in "--option=value" form.</summary>
+    private static bool IsOption(string arg)
+    {
+        var eq = arg.IndexOf('=');
+        return Options.Contains(eq > 0 ? arg[..eq] : arg);
+    }
 
     /// <summary>Builds a Windows command line that CommandLineToArgvW / the C runtime split back into exactly <paramref name="args"/>.</summary>
     public static string Join(IEnumerable<string> args) => string.Join(' ', args.Select(Quote));

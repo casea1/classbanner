@@ -3,7 +3,11 @@
   End-to-end check of a published BetterBanner.exe on a real Windows machine (used by CI; needs admin).
   Installs, verifies files/registry/settings, runs the banner briefly, then uninstalls and verifies cleanup.
 #>
-param([Parameter(Mandatory)] [string] $Exe)
+param(
+    [Parameter(Mandatory)] [string] $Exe,
+    # Optional: the published v1.0.0-beta.1 exe, to test upgrading from it (settings migration).
+    [string] $Beta1Exe
+)
 
 $ErrorActionPreference = 'Stop'
 $installDir = Join-Path $env:ProgramFiles 'BetterBanner'
@@ -29,6 +33,28 @@ Write-Host ("BetterBanner.exe is {0:N2} MB" -f $size)
 Assert ($size -lt 15) 'exe is small'
 
 Invoke-Banner @('version')
+
+if ($Beta1Exe) {
+    # Upgrade from beta.1: settings lived in ProgramData; they must be migrated (caption, notice), the old folder
+    # removed, and beta.1 banners (which can't restart themselves) stopped.
+    $legacyDir = Join-Path $env:ProgramData 'BetterBanner'
+    $p = Start-Process -FilePath $Beta1Exe -ArgumentList 'install --level S --caption "SECRET//NOFORN" --logon-title Notice --logon-text "Authorized use only" --no-start --quiet' -Wait -PassThru -NoNewWindow
+    Assert ($p.ExitCode -eq 0 -and (Test-Path "$legacyDir\settings.json")) 'beta.1 installed'
+    $oldBanner = Start-Process -FilePath "$installDir\BetterBanner.exe" -PassThru
+    Start-Sleep -Seconds 3
+
+    Invoke-Banner @('install', '--no-start')
+    $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
+    Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN') 'beta.1 settings migrated without --level'
+    Assert (-not (Test-Path $legacyDir)) 'beta.1 settings folder removed'
+    $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    Assert ($notice.legalnoticetext -eq 'Authorized use only') 'beta.1 sign-in notice kept'
+    Assert ($oldBanner.HasExited) 'beta.1 banner stopped'
+
+    Invoke-Banner @('uninstall')
+    Start-Sleep -Seconds 1
+    Assert (-not (Test-Path $installDir)) 'clean slate after upgrade test'
+}
 
 # A first install must say which classification; it never silently becomes UNCLASSIFIED.
 Invoke-Banner @('install', '--no-start') -ExpectedExitCode 2
@@ -66,8 +92,23 @@ Invoke-Banner @('config', '--set', 'FontSize=12', '--quiet') -ExpectedExitCode 1
 Assert ((Get-Content $settingsFile -Raw).Trim() -eq '{ this is not json') 'config refuses to overwrite an unreadable file'
 Set-Content $settingsFile $good
 
-# A value can't be another option.
+# A value can't be one of our options, but may start with "--".
 Invoke-Banner @('config', '--caption', '--quiet') -ExpectedExitCode 2
+Invoke-Banner @('config', '--logon-text', '-- Authorized use only --', '--quiet')
+$notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+Assert ($notice.legalnoticetext -eq '-- Authorized use only --') 'value starting with -- accepted'
+
+# config never saves a level nobody chose (issue #6), and never removes the notice unless told to.
+$good = Get-Content $settingsFile -Raw
+Set-Content $settingsFile '{ "Level": "Sekret", "Caption": "SECRET//NOFORN" }'
+Invoke-Banner @('config', '--set', 'FontSize=12', '--quiet') -ExpectedExitCode 2
+Assert ((Get-Content $settingsFile -Raw).Trim() -eq '{ "Level": "Sekret", "Caption": "SECRET//NOFORN" }') 'config refuses to save without a level'
+Invoke-Banner @('config', '--set', 'FontSize=999', '--quiet') -ExpectedExitCode 2
+Set-Content $settingsFile '{ "Level": "S" }'
+Invoke-Banner @('config', '--set', 'FontSize=12', '--quiet')
+$notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+Assert ($notice.legalnoticetext -eq '-- Authorized use only --') 'notice kept when the file has no notice fields'
+Set-Content $settingsFile $good
 
 # Settings window opens and stays up until closed.
 $settingsWindow = Start-Process -FilePath "$installDir\BetterBanner.exe" -ArgumentList 'settings' -PassThru

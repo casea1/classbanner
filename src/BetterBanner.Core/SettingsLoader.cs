@@ -9,7 +9,7 @@ public interface IPolicySource
 public sealed record LoadedSettings(BannerSettings Settings, IReadOnlyList<string> Warnings, bool FromPolicy);
 
 /// <summary>The settings file on its own. <see cref="Unreadable"/> means it exists but isn't usable JSON at all.</summary>
-public sealed record SettingsFile(BannerSettings Settings, IReadOnlyList<string> Warnings, bool Exists, bool Unreadable, bool LevelSet);
+public sealed record SettingsFile(BannerSettings Settings, IReadOnlyList<string> Warnings, bool Exists, bool Unreadable);
 
 public static class SettingsLoader
 {
@@ -30,18 +30,14 @@ public static class SettingsLoader
         var settings = file.Settings;
 
         var fromPolicy = false;
-        var levelSet = file.LevelSet;
         if (policy is not null)
         {
             try
             {
                 var values = policy.ReadValues();
                 fromPolicy = values.Count > 0;
-                var rejected = SettingKeys.ApplyAll(settings, values);
-                foreach (var name in rejected)
+                foreach (var name in SettingKeys.ApplyAll(settings, values))
                     warnings.Add($"Ignoring invalid policy value '{name}'.");
-                levelSet |= values.Keys.Any(k => k.Equals(nameof(BannerSettings.Level), StringComparison.OrdinalIgnoreCase)) &&
-                            !rejected.Contains(nameof(BannerSettings.Level), StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             {
@@ -50,8 +46,7 @@ public static class SettingsLoader
         }
 
         // Never fall back to a marking nobody chose: an unknown level shows "CLASSIFICATION NOT SET" instead.
-        settings.LevelNotConfigured = !levelSet;
-        if (!levelSet) warnings.Add("No valid classification level is configured; the banner shows CLASSIFICATION NOT SET.");
+        if (settings.LevelNotConfigured) warnings.Add("No valid classification level is configured; the banner shows CLASSIFICATION NOT SET.");
 
         settings.Normalize();
         return new LoadedSettings(settings, warnings, fromPolicy);
@@ -60,16 +55,16 @@ public static class SettingsLoader
     /// <summary>The settings file alone (what <c>config</c> edits), without policy. Bad values are skipped and reported.</summary>
     public static SettingsFile LoadFile(string? path)
     {
-        if (path is null || !File.Exists(path)) return new SettingsFile(new BannerSettings(), [], Exists: false, Unreadable: false, LevelSet: false);
+        if (path is null || !File.Exists(path)) return new SettingsFile(new BannerSettings(), [], Exists: false, Unreadable: false);
         try
         {
             var parsed = SettingsSerializer.ParseLenient(File.ReadAllText(path));
             var warnings = parsed.Rejected.Select(r => $"Ignoring invalid setting in '{path}': {r}").ToList();
-            return new SettingsFile(parsed.Settings, warnings, Exists: true, Unreadable: false, parsed.LevelSet);
+            return new SettingsFile(parsed.Settings, warnings, Exists: true, Unreadable: false);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
         {
-            return new SettingsFile(new BannerSettings(), [$"Could not read settings file '{path}': {ex.Message}"], Exists: true, Unreadable: true, LevelSet: false);
+            return new SettingsFile(new BannerSettings(), [$"Could not read settings file '{path}': {ex.Message}"], Exists: true, Unreadable: true);
         }
     }
 

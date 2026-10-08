@@ -32,10 +32,13 @@ jobs:
       - name: Version
         id: version
         shell: pwsh
+        # Tag names and inputs are untrusted text: pass them through the environment, never into the script itself.
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { $env:INPUT_VERSION.Trim().TrimStart('v') } else { '${{ github.ref_name }}'.TrimStart('v') }
+          $version = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION.Trim().TrimStart('v') } else { $env:REF_NAME.TrimStart('v') }
           if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "'$version' is not a valid version (expected e.g. 1.2.0 or 1.2.0-beta.1)." }
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version" >> $env:GITHUB_OUTPUT
@@ -55,8 +58,10 @@ jobs:
 
       - name: Package
         shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          $v = '${{ steps.version.outputs.version }}'
+          $v = $env:VERSION
           New-Item -ItemType Directory dist | Out-Null
           Copy-Item publish/BetterBanner.exe dist/BetterBanner.exe
           Compress-Archive -Path policy/* -DestinationPath "dist/BetterBanner-$v-GroupPolicy.zip"
@@ -69,8 +74,9 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          $tag = '${{ steps.version.outputs.tag }}'
+          $tag = $env:TAG
           $prerelease = if ($tag -match '-') { '--prerelease' } else { $null }
           # For a pushed tag the tag exists; for "Run workflow" gh creates it on the built commit.
           gh release create $tag (Get-ChildItem dist -File).FullName --title "Better Banner $tag" --generate-notes --target $env:GITHUB_SHA $prerelease

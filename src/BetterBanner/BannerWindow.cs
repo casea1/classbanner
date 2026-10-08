@@ -173,26 +173,37 @@ internal sealed unsafe class BannerWindow : Win32Window
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, ToColorRef(_settings.EffectiveForeColor));
 
-            // The clock sits on the right. The caption stays centered on the banner but never runs into the clock:
-            // it gets the middle area that is clear of the clock on both sides, and is cut with "..." if too long.
-            var captionRect = client;
+            // The marking is never cut off; the clock gives way first (see CaptionLayout).
+            const uint flags = DT_SINGLELINE | DT_NOPREFIX;
+            var caption = _settings.EffectiveCaption;
             var clock = _host.ClockText;
-            if (clock.Length > 0)
-            {
-                var pad = (int)Math.Round(8 * Slot.Dpi / (double)BannerLayout.BaseDpi);
-                var measure = client;
-                DrawTextW(hdc, clock, -1, ref measure, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
-                var reserved = (measure.Right - measure.Left) + 2 * pad;
+            var pad = (int)Math.Round(8 * Slot.Dpi / (double)BannerLayout.BaseDpi);
+            var captionWidth = MeasureWidth(hdc, caption, flags);
+            var clockWidth = clock.Length > 0 ? MeasureWidth(hdc, clock, flags) : 0;
+            var placement = CaptionLayout.Place(client.Right - client.Left, captionWidth, clockWidth, pad);
 
+            if (placement.ShowClock && clockWidth > 0)
+            {
                 var clockRect = client;
                 clockRect.Right -= pad;
-                DrawTextW(hdc, clock, -1, ref clockRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-                captionRect.Left += reserved;
-                captionRect.Right -= reserved;
+                DrawTextW(hdc, clock, -1, ref clockRect, DT_RIGHT | DT_VCENTER | flags);
             }
-            if (captionRect.Right > captionRect.Left)
-                DrawTextW(hdc, _settings.EffectiveCaption, -1, ref captionRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+
+            var captionRect = new RECT(client.Left + placement.Left, client.Top, client.Left + placement.Right, client.Bottom);
+            if (placement.Scale < 1)
+            {
+                // Too wide even without the clock (very long marking on a narrow screen): shrink rather than truncate.
+                var pixels = Math.Max(6, (int)(BannerLayout.FontPixels(_settings.FontSize, Slot.Dpi) * placement.Scale));
+                var small = CreateFontW(-pixels, 0, 0, 0, FW_BOLD, 0, 0, 0, 1, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
+                var previous = SelectObject(hdc, small);
+                DrawTextW(hdc, caption, -1, ref captionRect, DT_CENTER | DT_VCENTER | flags);
+                SelectObject(hdc, previous);
+                DeleteObject(small);
+            }
+            else
+            {
+                DrawTextW(hdc, caption, -1, ref captionRect, DT_CENTER | DT_VCENTER | flags);
+            }
 
             SelectObject(hdc, oldFont);
         }
@@ -200,6 +211,13 @@ internal sealed unsafe class BannerWindow : Win32Window
         {
             EndPaint(Handle, ps);
         }
+    }
+
+    private static int MeasureWidth(nint hdc, string text, uint flags)
+    {
+        var rect = new RECT(0, 0, 0, 0);
+        DrawTextW(hdc, text, -1, ref rect, DT_CALCRECT | flags);
+        return rect.Right - rect.Left;
     }
 
     private void SetAlpha(byte alpha) => SetLayeredWindowAttributes(Handle, 0, alpha, LWA_ALPHA);

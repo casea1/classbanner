@@ -16,19 +16,19 @@ public static class SettingKeys
             [nameof(BannerSettings.BackColor)] = (s, v) => TryColor(v, out var c) && Set(() => s.BackColor = c),
             [nameof(BannerSettings.ForeColor)] = (s, v) => TryColor(v, out var c) && Set(() => s.ForeColor = c),
             [nameof(BannerSettings.Position)] = (s, v) => TryEnum<BannerPosition>(v, out var p) && Set(() => s.Position = p),
-            [nameof(BannerSettings.FontSize)] = (s, v) => TryInt(v, out var i) && Set(() => s.FontSize = i),
-            [nameof(BannerSettings.HoverTransparency)] = (s, v) => TryInt(v, out var i) && Set(() => s.HoverTransparency = i),
+            [nameof(BannerSettings.FontSize)] = (s, v) => TryInt(v, 8, 36, out var i) && Set(() => s.FontSize = i),
+            [nameof(BannerSettings.HoverTransparency)] = (s, v) => TryInt(v, 0, 90, out var i) && Set(() => s.HoverTransparency = i),
             [nameof(BannerSettings.StayAboveFullScreenApps)] = (s, v) => TryBool(v, out var b) && Set(() => s.StayAboveFullScreenApps = b),
             [nameof(BannerSettings.AllowUserExit)] = (s, v) => TryBool(v, out var b) && Set(() => s.AllowUserExit = b),
             [nameof(BannerSettings.ClockEnabled)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockEnabled = b),
-            [nameof(BannerSettings.ClockFormat)] = (s, v) => !string.IsNullOrWhiteSpace(v) && Set(() => s.ClockFormat = v),
+            [nameof(BannerSettings.ClockFormat)] = (s, v) => BannerText.IsValidClockFormat(v) && Set(() => s.ClockFormat = v),
             [nameof(BannerSettings.ClockUseZulu)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockUseZulu = b),
             [nameof(BannerSettings.ClockUppercase)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockUppercase = b),
             [nameof(BannerSettings.EnforceColors)] = (s, v) => TryBool(v, out var b) && Set(() => s.EnforceColors = b),
             [nameof(BannerSettings.WallpaperMode)] = (s, v) => TryEnum<WallpaperMode>(v, out var m) && Set(() => s.WallpaperMode = m),
             [nameof(BannerSettings.WallpaperImagePath)] = (s, v) => Set(() => s.WallpaperImagePath = NullIfBlank(v)),
             [nameof(BannerSettings.EnforceScreenSaver)] = (s, v) => TryBool(v, out var b) && Set(() => s.EnforceScreenSaver = b),
-            [nameof(BannerSettings.ScreenSaverTimeoutSeconds)] = (s, v) => TryInt(v, out var i) && Set(() => s.ScreenSaverTimeoutSeconds = i),
+            [nameof(BannerSettings.ScreenSaverTimeoutSeconds)] = (s, v) => TryInt(v, 60, 7200, out var i) && Set(() => s.ScreenSaverTimeoutSeconds = i),
             [nameof(BannerSettings.ScreenSaverRequirePassword)] = (s, v) => TryBool(v, out var b) && Set(() => s.ScreenSaverRequirePassword = b),
             [nameof(BannerSettings.LogonNoticeTitle)] = (s, v) => Set(() => s.LogonNoticeTitle = NullIfBlank(v)),
             [nameof(BannerSettings.LogonNoticeText)] = (s, v) => Set(() => s.LogonNoticeText = NullIfBlank(v)),
@@ -68,8 +68,9 @@ public static class SettingKeys
         return true;
     }
 
-    private static bool TryInt(string v, out int i) =>
-        int.TryParse(v.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out i);
+    /// <summary>Out-of-range numbers are rejected (and reported) rather than silently clamped.</summary>
+    private static bool TryInt(string v, int min, int max, out int i) =>
+        int.TryParse(v.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out i) && i >= min && i <= max;
 
     private static bool TryEnum<T>(string v, out T value) where T : struct, Enum =>
         Enum.TryParse(v.Trim(), ignoreCase: true, out value) && Enum.IsDefined(value);

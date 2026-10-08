@@ -41,9 +41,16 @@ jobs:
       - name: Publish native exe
         run: dotnet publish src/BetterBanner/BetterBanner.csproj -c Release -o publish
 
-      - name: Smoke test (install, run, uninstall)
+      - name: Download v1.0.0-beta.1 for the upgrade test
         shell: pwsh
-        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release download v1.0.0-beta.1 --pattern BetterBanner.exe --dir beta1
+
+      - name: Smoke test (upgrade from beta.1, install, run, uninstall)
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe -Beta1Exe beta1/BetterBanner.exe
 
       - uses: actions/upload-artifact@v6
         if: always()

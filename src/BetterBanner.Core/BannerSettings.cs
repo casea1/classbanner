@@ -27,7 +27,11 @@ public enum WallpaperMode
 /// </summary>
 public sealed class BannerSettings
 {
-    public ClassificationLevel Level { get; set; } = ClassificationLevel.Unclassified;
+    /// <summary>
+    /// The classification. Null means not configured: the banner then shows <see cref="NotConfiguredCaption"/>, and
+    /// nothing ever saves a level nobody chose (null is simply left out of settings.json).
+    /// </summary>
+    public ClassificationLevel? Level { get; set; }
 
     /// <summary>Replaces the level's default text, e.g. "SECRET//NOFORN". Null or empty uses the standard marking.</summary>
     public string? Caption { get; set; }
@@ -55,7 +59,7 @@ public sealed class BannerSettings
     public bool ClockEnabled { get; set; }
 
     /// <summary>.NET custom date/time format. %TZI% becomes "Z" (Zulu) or "L" (local).</summary>
-    public string ClockFormat { get; set; } = "ddd dd-MMM-yy HH:mm%TZI%";
+    public string ClockFormat { get; set; } = BannerText.DefaultClockFormat;
 
     public bool ClockUseZulu { get; set; }
 
@@ -87,15 +91,13 @@ public sealed class BannerSettings
     public const string NotConfiguredCaption = "CLASSIFICATION NOT SET - CONTACT YOUR ADMINISTRATOR";
     public static readonly RgbColor NotConfiguredBackColor = RgbColor.Parse("#4D4D4D");
 
-    /// <summary>
-    /// Set by the loader when neither the settings file nor Group Policy supplies a valid level. The banner then shows
-    /// <see cref="NotConfiguredCaption"/> rather than defaulting to a marking (UNCLASSIFIED) nobody chose.
-    /// </summary>
+    /// <summary>No valid level from the settings file or Group Policy.</summary>
     [JsonIgnore]
-    public bool LevelNotConfigured { get; set; }
+    public bool LevelNotConfigured => Level is null;
 
+    /// <summary>The level's standard marking and colors. Only meaningful when <see cref="Level"/> is set.</summary>
     [JsonIgnore]
-    public ClassificationPreset Preset => ClassificationPresets.Get(Level);
+    public ClassificationPreset Preset => ClassificationPresets.Get(Level ?? ClassificationLevel.Unclassified);
 
     [JsonIgnore]
     public string EffectiveCaption => LevelNotConfigured ? NotConfiguredCaption
@@ -115,13 +117,14 @@ public sealed class BannerSettings
     /// <summary>Clamps out-of-range values so bad policy or file data can never break the banner.</summary>
     public void Normalize()
     {
-        if (!Enum.IsDefined(Level)) Level = ClassificationLevel.Unclassified;
+        if (Level is { } level && !Enum.IsDefined(level)) Level = null;
         if (!Enum.IsDefined(Position)) Position = BannerPosition.Both;
         if (!Enum.IsDefined(WallpaperMode)) WallpaperMode = WallpaperMode.Off;
+        // Values are range-checked when applied; this is a last line of defence for code that sets them directly.
         FontSize = Math.Clamp(FontSize, 8, 36);
         HoverTransparency = Math.Clamp(HoverTransparency, 0, 90);
         ScreenSaverTimeoutSeconds = Math.Clamp(ScreenSaverTimeoutSeconds, 60, 7200);
-        if (string.IsNullOrWhiteSpace(ClockFormat)) ClockFormat = new BannerSettings().ClockFormat;
+        if (!BannerText.IsValidClockFormat(ClockFormat)) ClockFormat = BannerText.DefaultClockFormat;
     }
 
     public BannerSettings Clone() => SettingsSerializer.Parse(SettingsSerializer.Serialize(this));

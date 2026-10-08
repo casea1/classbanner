@@ -25,6 +25,13 @@ public class ClockTests
     }
 
     [Fact]
+    public void Invalid_format_falls_back_to_the_default_instead_of_showing_the_format()
+    {
+        var text = BannerText.FormatClock(Now, "HH:mm \\", useZulu: true, uppercase: false);
+        Assert.Equal(BannerText.FormatClock(Now, BannerText.DefaultClockFormat, true, false), text);
+    }
+
+    [Fact]
     public void Single_letter_format_is_custom_not_standard()
     {
         Assert.Equal("7", BannerText.FormatClock(Now, "d", false, false));
@@ -147,6 +154,41 @@ public class CommandLineTests
         Assert.Contains("--caption", cmd.Error);
     }
 
+    /// <summary>Issue #11: values may start with "--" when they aren't one of our options.</summary>
+    [Theory]
+    [InlineData("--logon-text", "-- Authorized use only --")]
+    [InlineData("--caption", "--")]
+    public void Values_starting_with_dashes_are_accepted(string option, string value)
+    {
+        var cmd = CommandLine.Parse(["config", option, value, "--quiet"]);
+        Assert.Null(cmd.Error);
+        Assert.Equal(value, Assert.Single(cmd.Settings).Value);
+        Assert.True(cmd.Quiet);
+    }
+
+    [Fact]
+    public void Option_equals_value_form()
+    {
+        var cmd = CommandLine.Parse(["config", "--caption=--quiet", "--level=S", "--logon-text=a=b"]);
+        Assert.Null(cmd.Error);
+        Assert.False(cmd.Quiet);
+        Assert.Equal(["--quiet", "S", "a=b"], cmd.Settings.Select(s => s.Value));
+    }
+
+    [Fact]
+    public void Flags_do_not_take_values()
+    {
+        Assert.NotNull(CommandLine.Parse(["uninstall", "--quiet=1"]).Error);
+    }
+
+    [Theory]
+    [InlineData("FontSize=999")]
+    [InlineData("ClockFormat=HH:mm \\")]
+    public void Command_line_rejects_out_of_range_and_invalid_values(string pair)
+    {
+        Assert.NotNull(CommandLine.Parse(["config", "--set", pair]).Error);
+    }
+
     [Fact]
     public void Empty_value_still_clears_the_caption()
     {
@@ -233,5 +275,44 @@ public class ArgumentQuotingTests
     public void Settings_command_parses()
     {
         Assert.Equal(CommandKind.Settings, CommandLine.Parse(["settings"]).Kind);
+    }
+}
+
+/// <summary>Issue #10: the marking is never cut off; the clock gives way.</summary>
+public class CaptionLayoutTests
+{
+    [Fact]
+    public void Centered_when_the_clock_fits_beside_it()
+    {
+        var p = CaptionLayout.Place(1920, 200, 250, 8);
+        Assert.Equal(new CaptionPlacement(0, 1920, true, 1), p);
+    }
+
+    [Fact]
+    public void Moved_left_when_centering_would_hit_the_clock()
+    {
+        var p = CaptionLayout.Place(1024, 600, 300, 8);
+        Assert.True(p.ShowClock);
+        Assert.Equal(1, p.Scale);
+        Assert.Equal(8, p.Left);
+        Assert.True(p.Right - p.Left >= 600);
+        Assert.True(p.Right <= 1024 - 8 - 300);
+    }
+
+    [Fact]
+    public void Clock_is_hidden_before_the_marking_is_shortened()
+    {
+        var p = CaptionLayout.Place(1024, 800, 300, 8);
+        Assert.False(p.ShowClock);
+        Assert.Equal(1, p.Scale);
+        Assert.Equal(new CaptionPlacement(0, 1024, false, 1), p);
+    }
+
+    [Fact]
+    public void Marking_wider_than_the_screen_is_shrunk_not_truncated()
+    {
+        var p = CaptionLayout.Place(800, 1600, 0, 8);
+        Assert.False(p.ShowClock);
+        Assert.InRange(p.Scale, 0.48, 0.5);
     }
 }

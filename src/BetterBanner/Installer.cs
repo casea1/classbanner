@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using BetterBanner.Core;
 using Microsoft.Win32;
@@ -31,13 +32,13 @@ internal static class Installer
     {
         if (!RequireAdmin(output)) return ExitCodes.NotAdmin;
 
-        var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
-        if (!CheckSettingsFile(file, output)) return ExitCodes.Error;
-        if (!file.LevelSet && !cmd.Settings.Any(s => s.Key.Equals(nameof(BannerSettings.Level), StringComparison.OrdinalIgnoreCase)))
-        {
-            output.Error("Choose the classification for this computer, e.g. install --level SECRET (U, CUI, C, S, TS or TS/SCI).");
-            return ExitCodes.BadArguments;
-        }
+        var upgradingFromBeta1 = Directory.Exists(LegacyDirectory);
+        var settings = PrepareSettings(cmd, output, out var failure);
+        if (settings is null) return failure;
+
+        // beta.1 banners can't restart themselves into a new version; stop them once (they start again at sign-in,
+        // and for the current user right after install).
+        if (upgradingFromBeta1) StopRunningBanners();
 
         // Banners in other users' sessions keep running: the running exe is renamed (Windows allows that), the new one
         // is copied in, and each banner restarts itself into the new version when it sees the new install id.
@@ -48,7 +49,7 @@ internal static class Installer
             ReplaceFile(self, InstalledExe);
         ReplaceFile(self, InstalledScr);
 
-        var settings = UpdateSettingsFile(file, cmd, output);
+        SaveSettings(settings, output);
 
         using (var run = Registry.LocalMachine.CreateSubKey(RunKey))
             run.SetValue(AppName, $"\"{InstalledExe}\"");
@@ -68,7 +69,7 @@ internal static class Installer
         }
 
         RegisterControlPanelItem();
-        ApplyLogonNotice(settings, output);
+        if (ChangesLogonNotice(cmd)) ApplyLogonNotice(settings, output);
         using (var state = Registry.LocalMachine.CreateSubKey(StateKey))
             state.SetValue(InstallIdValue, Guid.NewGuid().ToString());
 
@@ -82,10 +83,10 @@ internal static class Installer
     public static int Config(ParsedCommand cmd, Output output)
     {
         if (!RequireAdmin(output)) return ExitCodes.NotAdmin;
-        var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
-        if (!CheckSettingsFile(file, output)) return ExitCodes.Error;
-        var settings = UpdateSettingsFile(file, cmd, output);
-        ApplyLogonNotice(settings, output);
+        var settings = PrepareSettings(cmd, output, out var failure);
+        if (settings is null) return failure;
+        SaveSettings(settings, output);
+        if (ChangesLogonNotice(cmd)) ApplyLogonNotice(settings, output);
         // Running banners in this session reload immediately; others within 30 seconds.
         SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "BetterBanner", SMTO_ABORTIFHUNG, 1000, out _);
         output.Line($"Settings saved to {SettingsLoader.DefaultSettingsPath}.");
@@ -105,6 +106,7 @@ internal static class Installer
         Registry.LocalMachine.DeleteSubKeyTree(ClsidKey, throwOnMissingSubKey: false);
         RemoveLogonNoticeIfOurs(output);
         Registry.LocalMachine.DeleteSubKeyTree(StateKey, throwOnMissingSubKey: false);
+        if (!cmd.KeepSettings) DeleteLegacyDirectory(output);
 
         if (Directory.Exists(InstallDir))
         {
@@ -180,15 +182,99 @@ internal static class Installer
         return false;
     }
 
-    private static BannerSettings UpdateSettingsFile(SettingsFile file, ParsedCommand cmd, Output output)
+    /// <summary>beta.1 kept settings here; any user could create this folder, so it is only trusted if admin-owned.</summary>
+    private static string LegacyDirectory =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), AppName);
+
+    /// <summary>
+    /// The settings file (or beta.1's, migrated) with the command's changes applied. Returns null, with the exit code,
+    /// when the file can't be read or no classification level would be set: nothing ever saves a level nobody chose.
+    /// </summary>
+    private static BannerSettings? PrepareSettings(ParsedCommand cmd, Output output, out int failure)
     {
+        failure = ExitCodes.Ok;
+        var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
+        if (!file.Exists && TryLoadLegacySettings(output) is { } legacy) file = legacy;
+        if (!CheckSettingsFile(file, output))
+        {
+            failure = ExitCodes.Error;
+            return null;
+        }
+
         foreach (var warning in file.Warnings) output.Line($"Warning: {warning} (removed when saving)");
         var settings = file.Settings;
         SettingKeys.ApplyAll(settings, cmd.Settings);
-        // Lives under Program Files, which only administrators can write; no custom permissions needed.
-        SettingsLoader.Save(settings, SettingsLoader.DefaultSettingsPath);
+        if (settings.Level is null && !PolicyProvidesLevel())
+        {
+            output.Error("No classification level is configured for this computer. Add --level, e.g. --level SECRET (U, CUI, C, S, TS or TS/SCI). Nothing was changed.");
+            failure = ExitCodes.BadArguments;
+            return null;
+        }
         return settings;
     }
+
+    private static bool PolicyProvidesLevel() =>
+        new RegistryPolicySource().ReadValues().TryGetValue(nameof(BannerSettings.Level), out var level) &&
+        ClassificationPresets.TryParseLevel(level, out _);
+
+    private static void SaveSettings(BannerSettings settings, Output output)
+    {
+        // Lives under Program Files, which only administrators can write; no custom permissions needed.
+        SettingsLoader.Save(settings, SettingsLoader.DefaultSettingsPath);
+        DeleteLegacyDirectory(output);
+    }
+
+    private static SettingsFile? TryLoadLegacySettings(Output output)
+    {
+        var path = Path.Combine(LegacyDirectory, "settings.json");
+        if (!File.Exists(path)) return null;
+        if (!IsAdminOwned(new DirectoryInfo(LegacyDirectory).GetAccessControl()) || !IsAdminOwned(new FileInfo(path).GetAccessControl()))
+        {
+            output.Line($"Warning: not importing {path}: it isn't owned by Administrators, so it may have been changed by a standard user.");
+            return null;
+        }
+
+        var legacy = SettingsLoader.LoadFile(path);
+        if (legacy.Unreadable)
+        {
+            output.Line($"Warning: could not import {path}; it can't be read.");
+            return null;
+        }
+        output.Line($"Imported settings from Better Banner beta.1 ({path}).");
+        return legacy;
+    }
+
+    /// <summary>Removes beta.1's settings folder once its settings live in the new place (admin-owned folders only).</summary>
+    private static void DeleteLegacyDirectory(Output output)
+    {
+        if (!Directory.Exists(LegacyDirectory)) return;
+        try
+        {
+            if (!IsAdminOwned(new DirectoryInfo(LegacyDirectory).GetAccessControl()))
+            {
+                output.Line($"Warning: left {LegacyDirectory} in place because it isn't owned by Administrators; check and delete it.");
+                return;
+            }
+            Directory.Delete(LegacyDirectory, recursive: true);
+            output.Line($"Removed the old settings folder {LegacyDirectory}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            output.Line($"Warning: could not remove {LegacyDirectory}: {ex.Message}");
+        }
+    }
+
+    private static bool IsAdminOwned(FileSystemSecurity security) =>
+        security.GetOwner(typeof(SecurityIdentifier)) is SecurityIdentifier owner &&
+        (owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid) || owner.IsWellKnown(WellKnownSidType.LocalSystemSid));
+
+    /// <summary>
+    /// The sign-in notice is machine state outside settings.json, so only touch it when the command sets or clears it
+    /// explicitly; a settings file without notice fields never removes a notice.
+    /// </summary>
+    private static bool ChangesLogonNotice(ParsedCommand cmd) => cmd.Settings.Any(s =>
+        s.Key.Equals(nameof(BannerSettings.LogonNoticeTitle), StringComparison.OrdinalIgnoreCase) ||
+        s.Key.Equals(nameof(BannerSettings.LogonNoticeText), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The Windows sign-in notice ("legal notice"): a small window users must click OK on before they can log on.

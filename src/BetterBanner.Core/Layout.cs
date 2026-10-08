@@ -132,3 +132,31 @@ public static class BannerLayout
             : monitor.Bottom - actual.Bottom <= slack;
     }
 }
+
+/// <summary>Where to draw the marking in a banner, whether the clock fits, and how much to shrink the text.</summary>
+public readonly record struct CaptionPlacement(int Left, int Right, bool ShowClock, double Scale);
+
+public static class CaptionLayout
+{
+    /// <summary>
+    /// The marking is never cut off: the clock gives way first. Centered when the clock fits beside it; otherwise moved
+    /// left into the free space; otherwise the clock is hidden; if the marking alone is still too wide, it is shrunk.
+    /// Widths are in pixels; <paramref name="clockWidth"/> is 0 when there is no clock.
+    /// </summary>
+    public static CaptionPlacement Place(int bannerWidth, int captionWidth, int clockWidth, int pad)
+    {
+        if (clockWidth > 0)
+        {
+            var clockLeft = bannerWidth - pad - clockWidth;
+            var centeredRight = (bannerWidth + captionWidth) / 2;
+            if (centeredRight + pad <= clockLeft)
+                return new CaptionPlacement(0, bannerWidth, ShowClock: true, Scale: 1);
+            if (pad + captionWidth + pad <= clockLeft)
+                return new CaptionPlacement(pad, clockLeft - pad, ShowClock: true, Scale: 1);
+        }
+
+        var available = Math.Max(1, bannerWidth - 2 * pad);
+        var scale = captionWidth <= available ? 1 : available / (double)captionWidth;
+        return new CaptionPlacement(0, bannerWidth, ShowClock: false, Scale: scale);
+    }
+}

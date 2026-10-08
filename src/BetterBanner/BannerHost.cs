@@ -39,6 +39,7 @@ internal sealed unsafe class BannerHost : Win32Window
     private int _nextId;
     private int _repositionStreak;
     private string _lastReconcileReason = "";
+    private string _warningsSnapshot = "";
     private readonly string? _installId = ReadInstallId();
 
     /// <summary>Set when a newer version was installed; Program restarts the banner after the message loop ends.</summary>
@@ -48,6 +49,7 @@ internal sealed unsafe class BannerHost : Win32Window
     {
         _loaded = RegistryPolicySource.LoadEffective();
         _settingsSnapshot = SettingsSerializer.Serialize(_loaded.Settings);
+        _warningsSnapshot = string.Join('\n', _loaded.Warnings);
         foreach (var warning in _loaded.Warnings) Log.Warn(warning);
 
         // A hidden top-level (not message-only) window: only top-level windows receive display and setting broadcasts.
@@ -233,11 +235,20 @@ internal sealed unsafe class BannerHost : Win32Window
     private void ReloadSettings()
     {
         var loaded = RegistryPolicySource.LoadEffective();
+
+        // Report new problems (e.g. the file just became unreadable) even when the effective settings didn't change.
+        var warnings = string.Join('\n', loaded.Warnings);
+        if (warnings != _warningsSnapshot)
+        {
+            _warningsSnapshot = warnings;
+            foreach (var warning in loaded.Warnings) Log.Warn(warning);
+        }
+
+        // "Not set" is part of the serialized settings (Level is absent), so NOT SET <-> UNCLASSIFIED is a change too.
         var snapshot = SettingsSerializer.Serialize(loaded.Settings);
         if (snapshot == _settingsSnapshot) return;
 
         Log.Info("Settings changed; applying.");
-        foreach (var warning in loaded.Warnings) Log.Warn(warning);
         _loaded = loaded;
         _settingsSnapshot = snapshot;
         ApplySettings(firstRun: false);

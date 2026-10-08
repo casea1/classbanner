@@ -191,14 +191,93 @@ public class SettingsTests
         }
     }
 
-    [Fact]
-    public void Out_of_range_values_are_clamped()
+    [Theory]
+    [InlineData("FontSize", "999")]
+    [InlineData("FontSize", "-5")]
+    [InlineData("FontSize", "7")]
+    [InlineData("HoverTransparency", "91")]
+    [InlineData("ScreenSaverTimeoutSeconds", "59")]
+    [InlineData("ScreenSaverTimeoutSeconds", "7201")]
+    public void Out_of_range_numbers_are_rejected_not_clamped(string name, string value)
     {
-        var s = SettingsSerializer.Parse("""{ "FontSize": 200, "HoverTransparency": -5, "Position": 9, "ScreenSaverTimeoutSeconds": 1 }""");
-        Assert.Equal(36, s.FontSize);
-        Assert.Equal(0, s.HoverTransparency);
-        Assert.Equal(BannerPosition.Both, s.Position);
-        Assert.Equal(60, s.ScreenSaverTimeoutSeconds);
+        var s = new BannerSettings();
+        Assert.False(SettingKeys.TryApply(s, name, value));
+    }
+
+    [Theory]
+    [InlineData("FontSize", "8")]
+    [InlineData("FontSize", "36")]
+    [InlineData("HoverTransparency", "0")]
+    [InlineData("ScreenSaverTimeoutSeconds", "7200")]
+    public void Range_limits_are_inclusive(string name, string value)
+    {
+        Assert.True(SettingKeys.TryApply(new BannerSettings(), name, value));
+    }
+
+    [Fact]
+    public void Out_of_range_value_in_the_file_is_reported_and_the_default_kept()
+    {
+        var loaded = LoadJson("""{ "Level": "S", "FontSize": 999 }""");
+        Assert.Equal(10, loaded.Settings.FontSize);
+        Assert.Contains(loaded.Warnings, w => w.Contains("FontSize"));
+    }
+
+    /// <summary>Issue #6: saving settings that have no level must never write a level.</summary>
+    [Fact]
+    public void Saving_without_a_level_writes_no_level()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var s = SettingsSerializer.Parse("""{ "Level": "Sekret", "Caption": "SECRET//NOFORN" }""");
+            Assert.Null(s.Level);
+            SettingKeys.TryApply(s, "FontSize", "12");
+            SettingsLoader.Save(s, path);
+
+            Assert.DoesNotContain("\"Level\"", File.ReadAllText(path));
+            Assert.True(SettingsLoader.Load(path, null).Settings.LevelNotConfigured);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>Issue #8: the settings window previews a clone; it must stay NOT SET.</summary>
+    [Fact]
+    public void Clone_keeps_not_configured()
+    {
+        var s = SettingsLoader.Load(null, null).Settings;
+        Assert.True(s.Clone().LevelNotConfigured);
+        Assert.Equal(BannerSettings.NotConfiguredCaption, s.Clone().EffectiveCaption);
+    }
+
+    /// <summary>Issue #7: the running banner reloads when its serialized settings change.</summary>
+    [Fact]
+    public void Not_set_and_unclassified_serialize_differently()
+    {
+        var notSet = new BannerSettings();
+        var unclassified = new BannerSettings { Level = ClassificationLevel.Unclassified };
+        Assert.NotEqual(SettingsSerializer.Serialize(notSet), SettingsSerializer.Serialize(unclassified));
+    }
+
+    /// <summary>Issue #12.4: the file stays readable and hand-editable.</summary>
+    [Fact]
+    public void Settings_file_keeps_ampersands_angle_brackets_and_accents()
+    {
+        var s = new BannerSettings { Level = ClassificationLevel.Confidential, Caption = "C&ONFIDENTIAL Ünï <b>" };
+        var json = SettingsSerializer.Serialize(s);
+        Assert.Contains("C&ONFIDENTIAL Ünï <b>", json);
+        Assert.Equal("C&ONFIDENTIAL Ünï <b>", SettingsSerializer.Parse(json).Caption);
+    }
+
+    [Theory]
+    [InlineData("HH:mm \\")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Invalid_clock_format_is_rejected(string format)
+    {
+        Assert.False(SettingKeys.TryApply(new BannerSettings(), "ClockFormat", format));
     }
 
     [Fact]

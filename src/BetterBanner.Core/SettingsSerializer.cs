@@ -1,4 +1,4 @@
-using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -12,11 +12,18 @@ namespace BetterBanner.Core;
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;
 
 /// <summary>The result of reading settings JSON: every value that could be applied, plus what was skipped.</summary>
-public sealed record ParsedSettings(BannerSettings Settings, IReadOnlyList<string> Rejected, bool LevelSet);
+public sealed record ParsedSettings(BannerSettings Settings, IReadOnlyList<string> Rejected);
 
 /// <summary>Reads and writes settings.json. Writing uses source generation so it works in the native (AOT) build.</summary>
 public static class SettingsSerializer
 {
+    // Readable, hand-editable file: keep "&", "<", ">" and non-ASCII characters as-is. The file is never embedded in
+    // HTML, so the default HTML-safe escaping only gets in the way.
+    private static readonly SettingsJsonContext Writer = new(new JsonSerializerOptions(SettingsJsonContext.Default.Options)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    });
+
     private static readonly JsonDocumentOptions DocumentOptions = new()
     {
         CommentHandling = JsonCommentHandling.Skip,
@@ -36,7 +43,6 @@ public static class SettingsSerializer
 
         var settings = new BannerSettings();
         var rejected = new List<string>();
-        var levelSet = false;
         foreach (var property in document.RootElement.EnumerateObject())
         {
             var value = property.Value.ValueKind switch
@@ -48,21 +54,19 @@ public static class SettingsSerializer
                 JsonValueKind.Null => "",
                 _ => null,
             };
-            if (value is not null && SettingKeys.TryApply(settings, property.Name, value))
-                levelSet |= string.Equals(property.Name, nameof(BannerSettings.Level), StringComparison.OrdinalIgnoreCase);
-            else
+            if (value is null || !SettingKeys.TryApply(settings, property.Name, value))
                 rejected.Add($"{property.Name} = {Describe(property.Value)}");
         }
 
         settings.Normalize();
-        return new ParsedSettings(settings, rejected, levelSet);
+        return new ParsedSettings(settings, rejected);
     }
 
     /// <summary>Lenient parse that ignores rejected values (see <see cref="ParseLenient"/>).</summary>
     public static BannerSettings Parse(string json) => ParseLenient(json).Settings;
 
     public static string Serialize(BannerSettings settings) =>
-        JsonSerializer.Serialize(settings, SettingsJsonContext.Default.BannerSettings);
+        JsonSerializer.Serialize(settings, Writer.BannerSettings);
 
     private static string Describe(JsonElement value)
     {

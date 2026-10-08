@@ -76,7 +76,7 @@ internal static class Program
                 return ExitCodes.Ok;
             default:
                 if (cmd.Error is not null) output.Error(cmd.Error + Environment.NewLine);
-                output.Line(CommandLine.Usage);
+                output.Line(output.IsConsole ? CommandLine.Usage : CommandLine.DialogUsage);
                 return cmd.Error is null ? ExitCodes.Ok : ExitCodes.BadArguments;
         }
     }
@@ -133,6 +133,8 @@ internal sealed class Output : IDisposable
         _console = AttachConsole(ATTACH_PARENT_PROCESS);
         if (_console) Console.WriteLine();
     }
+
+    public bool IsConsole => _console;
 
     public void Line(string text)
     {

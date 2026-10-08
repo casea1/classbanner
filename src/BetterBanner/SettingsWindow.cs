@@ -25,7 +25,12 @@ internal sealed class SettingsWindow : Win32Window
     private static readonly (BannerPosition Position, string Name)[] Positions =
         [(BannerPosition.Both, "Top and bottom"), (BannerPosition.Top, "Top only"), (BannerPosition.Bottom, "Bottom only")];
 
-    private readonly BannerSettings _initial;
+    private const uint WM_SAVE_DONE = WM_APP + 20;
+    private const int SaveCancelled = -1223;
+    private const int SaveFailedToStart = int.MinValue;
+
+    private BannerSettings _initial;
+    private volatile string? _saveError;
     private readonly HashSet<string> _policyKeys;
     private readonly List<Row> _rows = [];
     private nint _font;
@@ -109,7 +114,8 @@ internal sealed class SettingsWindow : Win32Window
     private void LoadValues()
     {
         var s = _initial;
-        SendMessage(_level, CB_SETCURSEL, Array.FindIndex(Levels, l => l.Level == s.Level), 0);
+        // Not configured: no selection (and a grey NOT SET preview) rather than a preselected UNCLASSIFIED.
+        SendMessage(_level, CB_SETCURSEL, s.Level is { } level ? Array.FindIndex(Levels, l => l.Level == level) : -1, 0);
         SetWindowTextW(_caption, s.Caption ?? "");
         SendMessage(_position, CB_SETCURSEL, Array.FindIndex(Positions, p => p.Position == s.Position), 0);
         SetWindowTextW(_fontSize, s.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -192,6 +198,10 @@ internal sealed class SettingsWindow : Win32Window
                     SetWindowPos(Handle, 0, suggested->Left, suggested->Top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
                 }
                 Layout();
+                return 0;
+
+            case WM_SAVE_DONE:
+                OnSaveDone((int)wParam);
                 return 0;
 
             case WM_CLOSE:
@@ -294,6 +304,11 @@ internal sealed class SettingsWindow : Win32Window
             SetWindowTextW(_status, "Text size must be between 8 and 36.");
             return;
         }
+        if ((int)SendMessage(_level, CB_GETCURSEL, 0, 0) < 0 && !_policyKeys.Contains(nameof(BannerSettings.Level)))
+        {
+            SetWindowTextW(_status, "Choose a classification first.");
+            return;
+        }
 
         var args = new List<string> { "config", "--quiet" };
         foreach (var (key, value) in ChangedValues())
@@ -302,28 +317,55 @@ internal sealed class SettingsWindow : Win32Window
             args.Add($"{key}={value}");
         }
 
+        // The UAC prompt and the elevated "config" can take a while; wait on a worker thread so this window keeps
+        // painting, then report back with a posted message.
+        EnableWindow(_save, false);
         SetWindowTextW(_status, "Saving...");
-        try
+        _saveError = null;
+        var hwnd = Handle;
+        var commandLine = CommandLine.Join(args);
+        _ = Task.Run(() =>
         {
-            using var identity = WindowsIdentity.GetCurrent();
-            var isAdmin = new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
-            using var process = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, CommandLine.Join(args))
+            int code;
+            try
             {
-                UseShellExecute = true,
-                Verb = isAdmin ? "open" : "runas", // UAC prompt for standard users / non-elevated admins
-            })!;
-            process.WaitForExit();
-            SetWindowTextW(_status, process.ExitCode == 0 ? "Saved. Banners update within a few seconds." : $"Not saved (error {process.ExitCode}).");
-        }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+                using var identity = WindowsIdentity.GetCurrent();
+                var isAdmin = new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+                using var process = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, commandLine)
+                {
+                    UseShellExecute = true,
+                    Verb = isAdmin ? "open" : "runas", // UAC prompt for standard users / non-elevated admins
+                })!;
+                process.WaitForExit();
+                code = process.ExitCode;
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                code = SaveCancelled;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Saving settings failed", ex);
+                _saveError = ex.Message;
+                code = SaveFailedToStart;
+            }
+            PostMessageW(hwnd, WM_SAVE_DONE, code, 0);
+        });
+    }
+
+    private void OnSaveDone(int code)
+    {
+        EnableWindow(_save, true);
+        var message = code switch
         {
-            SetWindowTextW(_status, "Not saved: administrator approval was cancelled.");
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Saving settings failed", ex);
-            SetWindowTextW(_status, "Not saved: " + ex.Message);
-        }
+            0 => "Saved. Banners update within a few seconds.",
+            SaveCancelled => "Not saved: administrator approval was cancelled.",
+            SaveFailedToStart => "Not saved: " + _saveError,
+            ExitCodes.BadArguments => "Not saved: a value was rejected. Check the classification and text size.",
+            _ => $"Not saved (error {code}). See {Log.FilePath}.",
+        };
+        SetWindowTextW(_status, message);
+        if (code == 0) _initial = RegistryPolicySource.LoadEffective().Settings;
     }
 
     // ---- control helpers ----

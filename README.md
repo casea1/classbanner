@@ -73,6 +73,8 @@ BetterBanner.exe show
 start /wait BetterBanner.exe uninstall
 ```
 
+Values can also be given as `--option=value`, e.g. `--logon-text="-- Authorized use only --"`.
+
 > `install`, `config` and `uninstall` need administrator rights and ask for them (UAC) if needed, so *Uninstall* in
 > *Apps & features* works for standard users with admin credentials.
 >
@@ -108,7 +110,12 @@ command line, e.g. `"Level": "S"`.
 
 If no valid classification level is configured at all (no settings, an unreadable `settings.json`, or an invalid
 `Level`), the banner shows a grey **CLASSIFICATION NOT SET - CONTACT YOUR ADMINISTRATOR** rather than defaulting to a
-marking nobody chose. `config` refuses to overwrite a `settings.json` it can't read.
+marking nobody chose. Nothing saves a level nobody chose either: `install` and `config` refuse to save settings
+without a level (unless Group Policy sets it), and refuse to overwrite a `settings.json` they can't read. Numbers
+outside the ranges below are rejected.
+
+Upgrading from 1.0.0-beta.1 (which kept settings in `C:\ProgramData\BetterBanner`) imports those settings on the
+first `install` and removes the old folder.
 
 | Setting | Default | Description |
 |---|---|---|
