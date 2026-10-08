@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Better Banner Group Policy template.
+  Copy BetterBanner.admx to %SystemRoot%\PolicyDefinitions (or the domain Central Store) and
+  en-US\BetterBanner.adml to the matching en-US folder. Value names match the settings documented in README.md.
+-->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="betterbanner" namespace="BetterBanner.Policies.BetterBanner" />
+    <using prefix="windows" namespace="Microsoft.Policies.Windows" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_BetterBanner1" displayName="$(string.SUPPORTED_BetterBanner1)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="BetterBanner" displayName="$(string.Cat_BetterBanner)" />
+    <category name="Appearance" displayName="$(string.Cat_Appearance)">
+      <parentCategory ref="BetterBanner" />
+    </category>
+    <category name="Desktop" displayName="$(string.Cat_Desktop)">
+      <parentCategory ref="BetterBanner" />
+    </category>
+  </categories>
+  <policies>
+
+    <policy name="Level" class="Machine" displayName="$(string.Level)" explainText="$(string.Level_Help)"
+            presentation="$(presentation.Level)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="BetterBanner" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <enum id="Level" valueName="Level" required="true">
+          <item displayName="$(string.Level_U)"><value><string>Unclassified</string></value></item>
+          <item displayName="$(string.Level_CUI)"><value><string>Cui</string></value></item>
+          <item displayName="$(string.Level_C)"><value><string>Confidential</string></value></item>
+          <item displayName="$(string.Level_S)"><value><string>Secret</string></value></item>
+          <item displayName="$(string.Level_TS)"><value><string>TopSecret</string></value></item>
+          <item displayName="$(string.Level_TSSCI)"><value><string>TopSecretSci</string></value></item>
+        </enum>
+      </elements>
+    </policy>
+
+    <policy name="Caption" class="Machine" displayName="$(string.Caption)" explainText="$(string.Caption_Help)"
+            presentation="$(presentation.Caption)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="BetterBanner" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <text id="Caption" valueName="Caption" maxLength="200" required="true" />
+      </elements>
+    </policy>
+
+    <policy name="Colors" class="Machine" displayName="$(string.Colors)" explainText="$(string.Colors_Help)"
+            presentation="$(presentation.Colors)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <text id="BackColor" valueName="BackColor" maxLength="7" />
+        <text id="ForeColor" valueName="ForeColor" maxLength="7" />
+      </elements>
+    </policy>
+
+    <policy name="Position" class="Machine" displayName="$(string.Position)" explainText="$(string.Position_Help)"
+            presentation="$(presentation.Position)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <enum id="Position" valueName="Position" required="true">
+          <item displayName="$(string.Position_Both)"><value><decimal value="3" /></value></item>
+          <item displayName="$(string.Position_Top)"><value><decimal value="1" /></value></item>
+          <item displayName="$(string.Position_Bottom)"><value><decimal value="2" /></value></item>
+        </enum>
+      </elements>
+    </policy>
+
+    <policy name="FontSize" class="Machine" displayName="$(string.FontSize)" explainText="$(string.FontSize_Help)"
+            presentation="$(presentation.FontSize)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <decimal id="FontSize" valueName="FontSize" minValue="8" maxValue="36" required="true" />
+      </elements>
+    </policy>
+
+    <policy name="HoverTransparency" class="Machine" displayName="$(string.HoverTransparency)" explainText="$(string.HoverTransparency_Help)"
+            presentation="$(presentation.HoverTransparency)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <decimal id="HoverTransparency" valueName="HoverTransparency" minValue="0" maxValue="90" required="true" />
+      </elements>
+    </policy>
+
+    <policy name="StayAboveFullScreenApps" class="Machine" displayName="$(string.StayAboveFullScreenApps)" explainText="$(string.StayAboveFullScreenApps_Help)"
+            key="SOFTWARE\Policies\BetterBanner" valueName="StayAboveFullScreenApps">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+
+    <policy name="AllowUserExit" class="Machine" displayName="$(string.AllowUserExit)" explainText="$(string.AllowUserExit_Help)"
+            key="SOFTWARE\Policies\BetterBanner" valueName="AllowUserExit">
+      <parentCategory ref="BetterBanner" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+
+    <policy name="Clock" class="Machine" displayName="$(string.Clock)" explainText="$(string.Clock_Help)"
+            presentation="$(presentation.Clock)" key="SOFTWARE\Policies\BetterBanner" valueName="ClockEnabled">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+      <elements>
+        <text id="ClockFormat" valueName="ClockFormat" maxLength="100" />
+        <boolean id="ClockUseZulu" valueName="ClockUseZulu">
+          <trueValue><decimal value="1" /></trueValue>
+          <falseValue><decimal value="0" /></falseValue>
+        </boolean>
+        <boolean id="ClockUppercase" valueName="ClockUppercase">
+          <trueValue><decimal value="1" /></trueValue>
+          <falseValue><decimal value="0" /></falseValue>
+        </boolean>
+      </elements>
+    </policy>
+
+    <policy name="EnforceColors" class="Machine" displayName="$(string.EnforceColors)" explainText="$(string.EnforceColors_Help)"
+            key="SOFTWARE\Policies\BetterBanner" valueName="EnforceColors">
+      <parentCategory ref="Desktop" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+
+    <policy name="Wallpaper" class="Machine" displayName="$(string.Wallpaper)" explainText="$(string.Wallpaper_Help)"
+            presentation="$(presentation.Wallpaper)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="Desktop" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <enum id="WallpaperMode" valueName="WallpaperMode" required="true">
+          <item displayName="$(string.Wallpaper_Generated)"><value><string>Generated</string></value></item>
+          <item displayName="$(string.Wallpaper_Image)"><value><string>Image</string></value></item>
+          <item displayName="$(string.Wallpaper_Off)"><value><string>Off</string></value></item>
+        </enum>
+        <text id="WallpaperImagePath" valueName="WallpaperImagePath" maxLength="260" expandable="true" />
+      </elements>
+    </policy>
+
+    <policy name="ScreenSaver" class="Machine" displayName="$(string.ScreenSaver)" explainText="$(string.ScreenSaver_Help)"
+            presentation="$(presentation.ScreenSaver)" key="SOFTWARE\Policies\BetterBanner" valueName="EnforceScreenSaver">
+      <parentCategory ref="Desktop" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+      <elements>
+        <decimal id="ScreenSaverTimeoutSeconds" valueName="ScreenSaverTimeoutSeconds" minValue="60" maxValue="7200" />
+        <boolean id="ScreenSaverRequirePassword" valueName="ScreenSaverRequirePassword">
+          <trueValue><decimal value="1" /></trueValue>
+          <falseValue><decimal value="0" /></falseValue>
+        </boolean>
+      </elements>
+    </policy>
+
+  </policies>
+</policyDefinitions>

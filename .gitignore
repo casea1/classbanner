@@ -5,3 +5,11 @@ reference/
 *.exe
 *.ocx
 *.dll
+
+# .NET build output
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+publish/
