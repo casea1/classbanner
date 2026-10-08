@@ -15,6 +15,8 @@ internal static class Program
         {
             return cmd.Kind switch
             {
+                // Double-clicking the downloaded exe opens setup; the installed copy (started at sign-in) is the banner.
+                CommandKind.Run when args.Length == 0 && !Installer.IsInstalledCopy => SettingsWindow.Run(setup: true),
                 CommandKind.Run => RunBanner(),
                 CommandKind.ScreenSaverShow => ScreenSaver.Run(),
                 CommandKind.ScreenSaverPreview => ExitCodes.Ok, // no preview in the Control Panel thumbnail

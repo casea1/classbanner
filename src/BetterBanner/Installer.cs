@@ -25,7 +25,15 @@ internal static class Installer
     private const string ControlPanelNamespaceKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\" + ControlPanelClsid;
 
     private static string InstallDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), AppName);
-    private static string InstalledExe => Path.Combine(InstallDir, "BetterBanner.exe");
+    public static string InstalledExe => Path.Combine(InstallDir, "BetterBanner.exe");
+    private static string StartMenuShortcut =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Better Banner.lnk");
+
+    public static bool IsInstalled => File.Exists(InstalledExe);
+
+    /// <summary>True when this process is the installed copy (which shows the banner) rather than a downloaded one.</summary>
+    public static bool IsInstalledCopy =>
+        string.Equals(Path.GetFullPath(Environment.ProcessPath ?? ""), InstalledExe, StringComparison.OrdinalIgnoreCase);
     private static string InstalledScr => Path.Combine(InstallDir, "BetterBanner.scr");
 
     public static int Install(ParsedCommand cmd, Output output)
@@ -69,6 +77,7 @@ internal static class Installer
         }
 
         RegisterControlPanelItem();
+        CreateStartMenuShortcut();
         if (ChangesLogonNotice(cmd)) ApplyLogonNotice(settings, output);
         using (var state = Registry.LocalMachine.CreateSubKey(StateKey))
             state.SetValue(InstallIdValue, Guid.NewGuid().ToString());
@@ -104,6 +113,7 @@ internal static class Installer
         Registry.LocalMachine.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false);
         Registry.LocalMachine.DeleteSubKeyTree(ControlPanelNamespaceKey, throwOnMissingSubKey: false);
         Registry.LocalMachine.DeleteSubKeyTree(ClsidKey, throwOnMissingSubKey: false);
+        if (File.Exists(StartMenuShortcut)) File.Delete(StartMenuShortcut);
         RemoveLogonNoticeIfOurs(output);
         Registry.LocalMachine.DeleteSubKeyTree(StateKey, throwOnMissingSubKey: false);
         if (!cmd.KeepSettings) DeleteLegacyDirectory(output);
@@ -152,6 +162,29 @@ internal static class Installer
         output.Line("");
         output.Line(SettingsSerializer.Serialize(loaded.Settings));
         return ExitCodes.Ok;
+    }
+
+    /// <summary>Start menu entry for all users that opens the settings window (created with the Windows Script Host).</summary>
+    private static void CreateStartMenuShortcut()
+    {
+        static string Quote(string s) => "'" + s.Replace("'", "''") + "'";
+        var script =
+            $"$s = (New-Object -ComObject WScript.Shell).CreateShortcut({Quote(StartMenuShortcut)}); " +
+            $"$s.TargetPath = {Quote(InstalledExe)}; $s.Arguments = 'settings'; " +
+            $"$s.IconLocation = {Quote(InstalledExe + ",0")}; $s.Description = 'Better Banner settings'; $s.Save()";
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -NonInteractive -Command \"{script}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            })!;
+            if (!process.WaitForExit(30_000) || process.ExitCode != 0) Log.Warn("Could not create the Start menu shortcut.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not create the Start menu shortcut: {ex.Message}");
+        }
     }
 
     /// <summary>Adds "Better Banner" to Control Panel (Appearance and Personalization; System and Security).</summary>

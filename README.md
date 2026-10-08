@@ -40,19 +40,20 @@ Get-FileHash .\BetterBanner.exe -Algorithm SHA256
 
 ### Standalone / workgroup PC
 
-From an **elevated** Command Prompt or PowerShell:
+**Double-click `BetterBanner.exe`.** The setup window opens. Choose the classification and any options, click
+**Install** and approve the Windows (UAC) prompt. Better Banner is then installed for every user:
+
+- **Start menu > Better Banner** and **Control Panel > Better Banner** open the same window to change settings later.
+- It is listed in **Apps & features** (Programs and Features), where you can uninstall it.
+- The banner starts now and at every sign-in.
+
+Running a newer `BetterBanner.exe` the same way offers **Upgrade** and keeps your settings.
+
+#### Command line (scripts and deployment)
 
 ```bat
 start /wait BetterBanner.exe install --level SECRET
 ```
-
-This copies the program to `C:\Program Files\BetterBanner`, saves settings next to it in `settings.json` (only
-administrators can change anything there), adds it to Control Panel and *Apps & features*, starts it for every user at
-sign-in, and starts it now for you. The first install must name a level (`--level`). Running `install` again upgrades in
-place: banners already running for other signed-in users restart themselves into the new version within seconds.
-
-After that, change settings from **Control Panel > Better Banner**, from the banner's right-click menu
-(*Settings...*), or from the command line. Saving asks for administrator approval.
 
 More examples:
 

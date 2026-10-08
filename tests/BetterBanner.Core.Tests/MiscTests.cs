@@ -89,6 +89,14 @@ public class CommandLineTests
     }
 
     [Theory]
+    [InlineData("banner")]
+    [InlineData("run")]
+    public void Banner_command_runs_the_banner_explicitly(string arg)
+    {
+        Assert.Equal(CommandKind.Run, CommandLine.Parse([arg]).Kind);
+    }
+
+    [Theory]
     [InlineData("/s", CommandKind.ScreenSaverShow)]
     [InlineData("/S", CommandKind.ScreenSaverShow)]
     [InlineData("/p:12345", CommandKind.ScreenSaverPreview)]

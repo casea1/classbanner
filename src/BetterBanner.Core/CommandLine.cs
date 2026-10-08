@@ -36,7 +36,8 @@ public static partial class CommandLine
         Better Banner - classification banner for Windows
 
         Usage:
-          BetterBanner.exe                        Show the banner (normally started automatically at sign-in)
+          BetterBanner.exe                        Setup window (installed copy: show the banner)
+          BetterBanner.exe banner                 Show the banner without installing
           BetterBanner.exe install [options]      Install for all users (run as administrator)
           BetterBanner.exe config [options]       Change machine settings (run as administrator)
           BetterBanner.exe settings               Open the settings window (also in Control Panel)
@@ -104,6 +105,7 @@ public static partial class CommandLine
             "uninstall" => CommandKind.Uninstall,
             "config" or "configure" => CommandKind.Config,
             "show" or "status" => CommandKind.Show,
+            "banner" or "run" => CommandKind.Run,
             "settings" => CommandKind.Settings,
             "help" or "-h" or "--help" or "-?" => CommandKind.Help,
             "version" or "--version" => CommandKind.Version,

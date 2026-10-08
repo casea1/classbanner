@@ -56,6 +56,12 @@ if ($Beta1Exe) {
     Assert (-not (Test-Path $installDir)) 'clean slate after upgrade test'
 }
 
+# Double-clicking the downloaded exe opens the setup window (and stays open until closed).
+$setup = Start-Process -FilePath $Exe -PassThru
+Start-Sleep -Seconds 3
+Assert (-not $setup.HasExited) 'downloaded exe opens the setup window'
+Stop-Process -Id $setup.Id
+
 # A first install must say which classification; it never silently becomes UNCLASSIFIED.
 Invoke-Banner @('install', '--no-start') -ExpectedExitCode 2
 Assert (-not (Test-Path "$installDir\BetterBanner.exe")) 'install without --level is refused'
@@ -70,6 +76,8 @@ $uninstall = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\U
 Assert ($uninstall.Publisher -eq 'Austin Case') 'listed in Apps & features with publisher'
 $cpl = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}'
 Assert (Test-Path $cpl) 'registered in Control Panel'
+$shortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Better Banner.lnk'
+Assert (Test-Path $shortcut) 'Start menu entry created'
 $cplCommand = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\CLSID\{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}\Shell\Open\Command').'(default)'
 Assert ($cplCommand -like '*BetterBanner.exe" settings') 'Control Panel opens the settings window'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
@@ -142,5 +150,6 @@ $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Poli
 Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) 'sign-in notice cleared'
 Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').BetterBanner) 'no longer starts at sign-in'
 Assert (-not (Test-Path $cpl)) 'removed from Control Panel'
+Assert (-not (Test-Path $shortcut)) 'Start menu entry removed'
 
 Write-Host 'Smoke test passed.'

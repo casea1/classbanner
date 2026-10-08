@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Setup window: double-clicking the downloaded `BetterBanner.exe` opens a graphical installer (classification and
+  options, then Install or Upgrade). No command prompt needed.
+- Start menu entry "Better Banner" that opens the settings window.
+- `BetterBanner.exe banner` shows the banner without installing.
+
 ## [1.0.0] - 2026-10-08
 
 First stable release. Same code as 1.0.0-beta.3; see the beta entries below for everything included.
