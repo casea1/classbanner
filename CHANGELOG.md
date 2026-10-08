@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-08
+
+First stable release. Same code as 1.0.0-beta.3; see the beta entries below for everything included.
+
 ## [1.0.0-beta.3] - 2026-10-08
 
 ### Fixed
