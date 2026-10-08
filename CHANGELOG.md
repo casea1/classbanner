@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-08
+
 ### Added
 - Setup window: double-clicking the downloaded `BetterBanner.exe` opens a graphical installer (classification and
   options, then Install or Upgrade). No command prompt needed.
