@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Security.AccessControl;
 using System.Security.Principal;
 using BetterBanner.Core;
 using Microsoft.Win32;
@@ -13,7 +12,9 @@ internal static class Installer
     private const string AppName = "BetterBanner";
     private const string RunKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string UninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BetterBanner";
-    private const string StateKey = @"SOFTWARE\BetterBanner";
+    public const string StateKey = @"SOFTWARE\BetterBanner";
+    /// <summary>Changes on every install; running banners watch it and restart into the new version.</summary>
+    public const string InstallIdValue = "InstallId";
     private const string LogonNoticeKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
     private const string Publisher = "Austin Case";
 
@@ -30,14 +31,24 @@ internal static class Installer
     {
         if (!RequireAdmin(output)) return ExitCodes.NotAdmin;
 
-        var settings = UpdateSettingsFile(cmd);
-        StopRunningBanners();
+        var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
+        if (!CheckSettingsFile(file, output)) return ExitCodes.Error;
+        if (!file.LevelSet && !cmd.Settings.Any(s => s.Key.Equals(nameof(BannerSettings.Level), StringComparison.OrdinalIgnoreCase)))
+        {
+            output.Error("Choose the classification for this computer, e.g. install --level SECRET (U, CUI, C, S, TS or TS/SCI).");
+            return ExitCodes.BadArguments;
+        }
 
+        // Banners in other users' sessions keep running: the running exe is renamed (Windows allows that), the new one
+        // is copied in, and each banner restarts itself into the new version when it sees the new install id.
         Directory.CreateDirectory(InstallDir);
+        DeleteLeftoverBinaries();
         var self = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the program path.");
         if (!string.Equals(Path.GetFullPath(self), InstalledExe, StringComparison.OrdinalIgnoreCase))
-            CopyWithRetry(self, InstalledExe);
-        CopyWithRetry(self, InstalledScr);
+            ReplaceFile(self, InstalledExe);
+        ReplaceFile(self, InstalledScr);
+
+        var settings = UpdateSettingsFile(file, cmd, output);
 
         using (var run = Registry.LocalMachine.CreateSubKey(RunKey))
             run.SetValue(AppName, $"\"{InstalledExe}\"");
@@ -58,6 +69,8 @@ internal static class Installer
 
         RegisterControlPanelItem();
         ApplyLogonNotice(settings, output);
+        using (var state = Registry.LocalMachine.CreateSubKey(StateKey))
+            state.SetValue(InstallIdValue, Guid.NewGuid().ToString());
 
         if (!cmd.NoStart) StartForCurrentUser();
 
@@ -69,7 +82,9 @@ internal static class Installer
     public static int Config(ParsedCommand cmd, Output output)
     {
         if (!RequireAdmin(output)) return ExitCodes.NotAdmin;
-        var settings = UpdateSettingsFile(cmd);
+        var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
+        if (!CheckSettingsFile(file, output)) return ExitCodes.Error;
+        var settings = UpdateSettingsFile(file, cmd, output);
         ApplyLogonNotice(settings, output);
         // Running banners in this session reload immediately; others within 30 seconds.
         SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "BetterBanner", SMTO_ABORTIFHUNG, 1000, out _);
@@ -91,21 +106,28 @@ internal static class Installer
         RemoveLogonNoticeIfOurs(output);
         Registry.LocalMachine.DeleteSubKeyTree(StateKey, throwOnMissingSubKey: false);
 
-        if (!cmd.KeepSettings && Directory.Exists(SettingsLoader.DefaultDirectory))
-            Directory.Delete(SettingsLoader.DefaultDirectory, recursive: true);
-
         if (Directory.Exists(InstallDir))
         {
-            var runningFromInstallDir = (Environment.ProcessPath ?? "").StartsWith(InstallDir, StringComparison.OrdinalIgnoreCase);
+            var runningFromInstallDir = (Environment.ProcessPath ?? "").StartsWith(InstallDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
             if (runningFromInstallDir)
             {
-                // Can't delete our own exe while running: let a short-lived cmd do it after we exit.
-                Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping 127.0.0.1 -n 3 > nul & rmdir /s /q \"{InstallDir}\"")
+                // Can't delete our own exe while running: let a short-lived cmd finish after we exit.
+                var delete = cmd.KeepSettings
+                    ? $"del /f /q \"{InstalledExe}\" \"{InstalledScr}\" \"{Path.Combine(InstallDir, "*.old-*")}\""
+                    : $"rmdir /s /q \"{InstallDir}\"";
+                Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping 127.0.0.1 -n 3 > nul & {delete}")
                 {
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     WorkingDirectory = Path.GetTempPath(),
                 });
+            }
+            else if (cmd.KeepSettings)
+            {
+                foreach (var path in Directory.EnumerateFiles(InstallDir))
+                {
+                    if (!string.Equals(path, SettingsLoader.DefaultSettingsPath, StringComparison.OrdinalIgnoreCase)) File.Delete(path);
+                }
             }
             else
             {
@@ -149,28 +171,23 @@ internal static class Installer
             ns.SetValue("", "Better Banner");
     }
 
-    private static BannerSettings UpdateSettingsFile(ParsedCommand cmd)
+    /// <summary>Refuses to touch a settings file that exists but can't be read, rather than replacing it with defaults.</summary>
+    private static bool CheckSettingsFile(SettingsFile file, Output output)
     {
-        var path = SettingsLoader.DefaultSettingsPath;
-        var settings = SettingsLoader.LoadFile(path);
-        SettingKeys.ApplyAll(settings, cmd.Settings);
-        // Lock the folder first so the new file inherits admin-only write access.
-        Directory.CreateDirectory(SettingsLoader.DefaultDirectory);
-        LockDownSettingsDirectory(SettingsLoader.DefaultDirectory);
-        SettingsLoader.Save(settings, path);
-        return settings;
+        if (!file.Unreadable) return true;
+        foreach (var warning in file.Warnings) output.Error(warning);
+        output.Error($"Nothing was changed. Fix or delete {SettingsLoader.DefaultSettingsPath}, then run the command again.");
+        return false;
     }
 
-    /// <summary>Only administrators and SYSTEM may change settings; users can read them.</summary>
-    private static void LockDownSettingsDirectory(string directory)
+    private static BannerSettings UpdateSettingsFile(SettingsFile file, ParsedCommand cmd, Output output)
     {
-        var security = new DirectorySecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        const InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
-        security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-        security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-        security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null), FileSystemRights.ReadAndExecute, inherit, PropagationFlags.None, AccessControlType.Allow));
-        new DirectoryInfo(directory).SetAccessControl(security);
+        foreach (var warning in file.Warnings) output.Line($"Warning: {warning} (removed when saving)");
+        var settings = file.Settings;
+        SettingKeys.ApplyAll(settings, cmd.Settings);
+        // Lives under Program Files, which only administrators can write; no custom permissions needed.
+        SettingsLoader.Save(settings, SettingsLoader.DefaultSettingsPath);
+        return settings;
     }
 
     /// <summary>
@@ -217,7 +234,7 @@ internal static class Installer
         return false;
     }
 
-    /// <summary>Stops banners in every session so files can be replaced; they restart at next sign-in (or below).</summary>
+    /// <summary>Stops banners in every session (uninstall only).</summary>
     private static void StopRunningBanners()
     {
         foreach (var process in Process.GetProcessesByName(AppName))
@@ -238,18 +255,38 @@ internal static class Installer
         }
     }
 
-    private static void CopyWithRetry(string source, string destination)
+    /// <summary>
+    /// Puts <paramref name="source"/> at <paramref name="destination"/>. If the destination is running (a banner or the
+    /// screen saver), it is renamed out of the way first; Windows allows renaming a running program but not deleting it.
+    /// </summary>
+    private static void ReplaceFile(string source, string destination)
     {
-        for (var attempt = 1; ; attempt++)
+        if (File.Exists(destination))
         {
             try
             {
-                File.Copy(source, destination, overwrite: true);
-                return;
+                File.Delete(destination);
             }
-            catch (IOException) when (attempt < 5)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Thread.Sleep(500 * attempt);
+                File.Move(destination, $"{destination}.old-{Guid.NewGuid():N}");
+            }
+        }
+        File.Copy(source, destination);
+    }
+
+    /// <summary>Removes renamed binaries from earlier upgrades once nothing is running them.</summary>
+    private static void DeleteLeftoverBinaries()
+    {
+        foreach (var old in Directory.EnumerateFiles(InstallDir, "*.old-*"))
+        {
+            try
+            {
+                File.Delete(old);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Still in use by a banner that hasn't restarted yet; the next install cleans it up.
             }
         }
     }

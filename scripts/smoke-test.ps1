@@ -7,15 +7,16 @@ param([Parameter(Mandatory)] [string] $Exe)
 
 $ErrorActionPreference = 'Stop'
 $installDir = Join-Path $env:ProgramFiles 'BetterBanner'
-$settingsFile = Join-Path $env:ProgramData 'BetterBanner\settings.json'
+$settingsFile = Join-Path $installDir 'settings.json'
 $log = Join-Path $env:LOCALAPPDATA 'BetterBanner\BetterBanner.log'
 
-function Invoke-Banner([string[]] $Arguments) {
+function Invoke-Banner([string[]] $Arguments, [int] $ExpectedExitCode = 0) {
     # Start-Process does not quote array elements, so quote anything with spaces or quotes ourselves.
-    $commandLine = ($Arguments | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    $commandLine = ($Arguments | ForEach-Object { if ($_ -eq '') { '""' } elseif ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
     $p = Start-Process -FilePath $Exe -ArgumentList $commandLine -Wait -PassThru -NoNewWindow
-    if ($p.ExitCode -ne 0) { throw "BetterBanner $($Arguments -join ' ') exited with $($p.ExitCode)" }
+    if ($p.ExitCode -ne $ExpectedExitCode) { throw "BetterBanner $($Arguments -join ' ') exited with $($p.ExitCode), expected $ExpectedExitCode" }
 }
+function Get-Banners { @(Get-Process -Name BetterBanner -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$installDir\*" }) }
 function Assert($Condition, [string] $Message) {
     if ($Condition) { Write-Host "ok - $Message"; return }
     Write-Host "--- BetterBanner.log ---"
@@ -28,6 +29,10 @@ Write-Host ("BetterBanner.exe is {0:N2} MB" -f $size)
 Assert ($size -lt 15) 'exe is small'
 
 Invoke-Banner @('version')
+
+# A first install must say which classification; it never silently becomes UNCLASSIFIED.
+Invoke-Banner @('install', '--no-start') -ExpectedExitCode 2
+Assert (-not (Test-Path "$installDir\BetterBanner.exe")) 'install without --level is refused'
 Invoke-Banner @('install', '--level', 'SECRET', '--caption', 'SECRET//NOFORN', '--logon-title', 'Notice',
                 '--logon-text', 'Authorized use only', '--set', 'ClockEnabled=1', '--no-start')
 
@@ -48,6 +53,22 @@ Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN'
 
 Invoke-Banner @('show')
 
+# One bad value in settings.json must not discard the rest (tester's bug), and config must keep the good values.
+Set-Content $settingsFile '{ "Level": "S", "Caption": "SECRET//NOFORN", "FontSize": "huge", "ClockEnabled": true }'
+Invoke-Banner @('config', '--set', 'HoverTransparency=30', '--quiet')
+$settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
+Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN' -and $settings.ClockEnabled -and $settings.HoverTransparency -eq 30) 'config keeps good values next to a bad one'
+
+# An unreadable settings file is never overwritten.
+$good = Get-Content $settingsFile -Raw
+Set-Content $settingsFile '{ this is not json'
+Invoke-Banner @('config', '--set', 'FontSize=12', '--quiet') -ExpectedExitCode 1
+Assert ((Get-Content $settingsFile -Raw).Trim() -eq '{ this is not json') 'config refuses to overwrite an unreadable file'
+Set-Content $settingsFile $good
+
+# A value can't be another option.
+Invoke-Banner @('config', '--caption', '--quiet') -ExpectedExitCode 2
+
 # Settings window opens and stays up until closed.
 $settingsWindow = Start-Process -FilePath "$installDir\BetterBanner.exe" -ArgumentList 'settings' -PassThru
 Start-Sleep -Seconds 3
@@ -61,14 +82,21 @@ Start-Sleep -Seconds 6
 Assert (-not $banner.HasExited) 'banner keeps running'
 $second = Start-Process -FilePath "$installDir\BetterBanner.exe" -PassThru
 Assert ($second.WaitForExit(5000)) 'second instance exits (single instance per session)'
-Stop-Process -Id $banner.Id
+
+# Upgrading in place: install no longer kills banners; each one restarts itself into the new version.
+Invoke-Banner @('install', '--no-start', '--quiet')
+Assert (Test-Path "$installDir\BetterBanner.exe") 'reinstall replaced the running exe'
+Start-Sleep -Seconds 8
+Assert ($banner.HasExited) 'old banner process restarted after upgrade'
+$restarted = Get-Banners
+Assert ($restarted.Count -eq 1 -and $restarted[0].Id -ne $banner.Id) 'exactly one new banner running after upgrade'
+$restarted | Stop-Process
 Get-Content $log | Write-Host
 Assert (-not (Select-String -Path $log -Pattern 'ERROR' -Quiet)) 'no errors logged'
 
 Invoke-Banner @('uninstall')
 Start-Sleep -Seconds 1
-Assert (-not (Test-Path $installDir)) 'install folder removed'
-Assert (-not (Test-Path $settingsFile)) 'settings removed'
+Assert (-not (Test-Path $installDir)) 'install folder and settings removed'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) 'sign-in notice cleared'
 Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').BetterBanner) 'no longer starts at sign-in'

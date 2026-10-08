@@ -173,17 +173,26 @@ internal sealed unsafe class BannerWindow : Win32Window
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, ToColorRef(_settings.EffectiveForeColor));
 
+            // The clock sits on the right. The caption stays centered on the banner but never runs into the clock:
+            // it gets the middle area that is clear of the clock on both sides, and is cut with "..." if too long.
             var captionRect = client;
-            DrawTextW(hdc, _settings.EffectiveCaption, -1, ref captionRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-
             var clock = _host.ClockText;
             if (clock.Length > 0)
             {
                 var pad = (int)Math.Round(8 * Slot.Dpi / (double)BannerLayout.BaseDpi);
+                var measure = client;
+                DrawTextW(hdc, clock, -1, ref measure, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+                var reserved = (measure.Right - measure.Left) + 2 * pad;
+
                 var clockRect = client;
                 clockRect.Right -= pad;
                 DrawTextW(hdc, clock, -1, ref clockRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+                captionRect.Left += reserved;
+                captionRect.Right -= reserved;
             }
+            if (captionRect.Right > captionRect.Left)
+                DrawTextW(hdc, _settings.EffectiveCaption, -1, ref captionRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
 
             SelectObject(hdc, oldFont);
         }

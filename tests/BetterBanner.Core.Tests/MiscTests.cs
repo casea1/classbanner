@@ -123,6 +123,38 @@ public class CommandLineTests
         Assert.Equal(CommandKind.Help, cmd.Kind);
     }
 
+    [Theory]
+    [InlineData("/settings")]
+    [InlineData("/start")]
+    [InlineData("/cancel")]
+    [InlineData("/p:abc")]
+    public void Only_exact_screen_saver_switches_start_the_screen_saver(string arg)
+    {
+        Assert.False(CommandLine.Parse([arg]).Kind is CommandKind.ScreenSaverShow or CommandKind.ScreenSaverPreview or CommandKind.ScreenSaverConfigure);
+    }
+
+    [Fact]
+    public void Screen_saver_preview_with_separate_window_handle()
+    {
+        Assert.Equal(CommandKind.ScreenSaverPreview, CommandLine.Parse(["/p", "123456"]).Kind);
+    }
+
+    [Fact]
+    public void An_option_is_never_taken_as_the_previous_options_value()
+    {
+        var cmd = CommandLine.Parse(["config", "--caption", "--quiet"]);
+        Assert.NotNull(cmd.Error);
+        Assert.Contains("--caption", cmd.Error);
+    }
+
+    [Fact]
+    public void Empty_value_still_clears_the_caption()
+    {
+        var cmd = CommandLine.Parse(["config", "--caption", "", "--quiet"]);
+        Assert.Null(cmd.Error);
+        Assert.True(cmd.Quiet);
+    }
+
     [Fact]
     public void Settings_only_allowed_for_install_and_config()
     {

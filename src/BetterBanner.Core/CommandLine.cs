@@ -25,8 +25,13 @@ public sealed record ParsedCommand(
     string? Error = null);
 
 /// <summary>Parses the single-exe command line. Friendly options map onto <see cref="SettingKeys"/> names.</summary>
-public static class CommandLine
+public static partial class CommandLine
 {
+    [System.Text.RegularExpressions.GeneratedRegex(@"^/([scp])(:\d*)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ScreenSaverSwitchRegex();
+
+    private static readonly System.Text.RegularExpressions.Regex ScreenSaverSwitch = ScreenSaverSwitchRegex();
+
     public const string Usage = """
         Better Banner - classification banner for Windows
 
@@ -58,18 +63,19 @@ public static class CommandLine
     {
         if (args.Count == 0) return new ParsedCommand(CommandKind.Run, []);
 
-        // Windows calls screen savers with /s, /p <hwnd>, /p:<hwnd>, /c or /c:<hwnd>, in any case.
+        // Windows calls screen savers with exactly /s, /p <hwnd>, /p:<hwnd>, /c or /c:<hwnd>, in any case.
         var first = args[0].Trim();
-        if (first.Length >= 2 && first[0] == '/' )
+        var screenSaver = ScreenSaverSwitch.Match(first);
+        if (screenSaver.Success)
         {
-            switch (char.ToLowerInvariant(first[1]))
+            return char.ToLowerInvariant(screenSaver.Groups[1].Value[0]) switch
             {
-                case 's': return new ParsedCommand(CommandKind.ScreenSaverShow, []);
-                case 'p': return new ParsedCommand(CommandKind.ScreenSaverPreview, []);
-                case 'c': return new ParsedCommand(CommandKind.ScreenSaverConfigure, []);
-                case '?': return new ParsedCommand(CommandKind.Help, []);
-            }
+                's' => new ParsedCommand(CommandKind.ScreenSaverShow, []),
+                'p' => new ParsedCommand(CommandKind.ScreenSaverPreview, []),
+                _ => new ParsedCommand(CommandKind.ScreenSaverConfigure, []),
+            };
         }
+        if (first == "/?") return new ParsedCommand(CommandKind.Help, []);
 
         var kind = first.ToLowerInvariant() switch
         {
@@ -90,9 +96,10 @@ public static class CommandLine
         for (var i = 1; i < args.Count; i++)
         {
             var arg = args[i];
+            // A value can't be another option: "--caption --quiet" is a missing caption, not the caption "--quiet".
             string? Next()
             {
-                if (i + 1 >= args.Count) return null;
+                if (i + 1 >= args.Count || args[i + 1].StartsWith("--", StringComparison.Ordinal)) return null;
                 return args[++i];
             }
 

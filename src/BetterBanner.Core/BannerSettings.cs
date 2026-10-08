@@ -23,7 +23,7 @@ public enum WallpaperMode
 
 /// <summary>
 /// Better Banner settings. Effective settings are the built-in defaults, overlaid by the machine settings file
-/// (%ProgramData%\BetterBanner\settings.json), overlaid by Group Policy (HKLM\SOFTWARE\Policies\BetterBanner).
+/// (%ProgramFiles%\BetterBanner\settings.json), overlaid by Group Policy (HKLM\SOFTWARE\Policies\BetterBanner).
 /// </summary>
 public sealed class BannerSettings
 {
@@ -84,17 +84,30 @@ public sealed class BannerSettings
 
     public string? LogonNoticeText { get; set; }
 
+    public const string NotConfiguredCaption = "CLASSIFICATION NOT SET - CONTACT YOUR ADMINISTRATOR";
+    public static readonly RgbColor NotConfiguredBackColor = RgbColor.Parse("#4D4D4D");
+
+    /// <summary>
+    /// Set by the loader when neither the settings file nor Group Policy supplies a valid level. The banner then shows
+    /// <see cref="NotConfiguredCaption"/> rather than defaulting to a marking (UNCLASSIFIED) nobody chose.
+    /// </summary>
+    [JsonIgnore]
+    public bool LevelNotConfigured { get; set; }
+
     [JsonIgnore]
     public ClassificationPreset Preset => ClassificationPresets.Get(Level);
 
     [JsonIgnore]
-    public string EffectiveCaption => string.IsNullOrWhiteSpace(Caption) ? Preset.Caption : Caption.Trim();
+    public string EffectiveCaption => LevelNotConfigured ? NotConfiguredCaption
+        : string.IsNullOrWhiteSpace(Caption) ? Preset.Caption : Caption.Trim();
 
     [JsonIgnore]
-    public RgbColor EffectiveBackColor => RgbColor.TryParse(BackColor, out var c) ? c : Preset.Background;
+    public RgbColor EffectiveBackColor => LevelNotConfigured ? NotConfiguredBackColor
+        : RgbColor.TryParse(BackColor, out var c) ? c : Preset.Background;
 
     [JsonIgnore]
-    public RgbColor EffectiveForeColor => RgbColor.TryParse(ForeColor, out var c) ? c : Preset.Foreground;
+    public RgbColor EffectiveForeColor => LevelNotConfigured ? RgbColor.White
+        : RgbColor.TryParse(ForeColor, out var c) ? c : Preset.Foreground;
 
     [JsonIgnore]
     public bool HasLogonNotice => !string.IsNullOrWhiteSpace(LogonNoticeTitle) || !string.IsNullOrWhiteSpace(LogonNoticeText);

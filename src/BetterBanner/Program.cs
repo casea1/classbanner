@@ -20,7 +20,7 @@ internal static class Program
                 CommandKind.ScreenSaverPreview => ExitCodes.Ok, // no preview in the Control Panel thumbnail
                 CommandKind.ScreenSaverConfigure => ShowScreenSaverInfo(),
                 CommandKind.Settings => SettingsWindow.Run(),
-                _ => RunCommand(cmd),
+                _ => RunCommand(cmd, args),
             };
         }
         catch (Exception ex)
@@ -36,18 +36,34 @@ internal static class Program
     private static int RunBanner()
     {
         // One banner process per user session. A second launch (Run key + manual start) just exits.
-        CreateMutexW(0, true, SingleInstanceMutex);
-        if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS) return ExitCodes.Ok;
+        var mutex = CreateMutexW(0, true, SingleInstanceMutex);
+        if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS)
+        {
+            CloseHandle(mutex);
+            return ExitCodes.Ok;
+        }
 
+        // Captured now: after an upgrade this path holds the new exe (the old one was renamed while running).
+        var exePath = Environment.ProcessPath;
         Log.Info($"Better Banner {AppInfo.Version} starting.");
         _ = new BannerHost();
         var code = Win32Window.RunMessageLoop();
+
+        if (BannerHost.RestartRequested && exePath is not null)
+        {
+            CloseHandle(mutex);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exePath) { UseShellExecute = false });
+        }
         Log.Info("Better Banner exiting.");
         return code;
     }
 
-    private static int RunCommand(ParsedCommand cmd)
+    private static int RunCommand(ParsedCommand cmd, string[] args)
     {
+        // Apps & features runs the uninstall command without elevation; ask for it (UAC) instead of failing.
+        if (cmd.Kind is (CommandKind.Install or CommandKind.Uninstall or CommandKind.Config) && !IsAdministrator())
+            return RunElevated(args, cmd.Quiet);
+
         using var output = new Output(cmd.Quiet);
         switch (cmd.Kind)
         {
@@ -62,6 +78,33 @@ internal static class Program
                 if (cmd.Error is not null) output.Error(cmd.Error + Environment.NewLine);
                 output.Line(CommandLine.Usage);
                 return cmd.Error is null ? ExitCodes.Ok : ExitCodes.BadArguments;
+        }
+    }
+
+    private static bool IsAdministrator()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        return new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+    }
+
+    /// <summary>Re-runs this command as administrator and returns its exit code.</summary>
+    private static int RunElevated(string[] args, bool quiet)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, CommandLine.Join(args))
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+            })!;
+            process.WaitForExit();
+            return process.ExitCode;
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            using var output = new Output(quiet);
+            output.Error("Administrator approval was cancelled; nothing was changed.");
+            return ExitCodes.NotAdmin;
         }
     }
 

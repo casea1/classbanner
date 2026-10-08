@@ -5,6 +5,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- One invalid value in `settings.json` no longer discards the whole file and falls back to UNCLASSIFIED; each value is
+  read on its own, with the same spellings as the command line (e.g. `"Level": "S"`).
+- `config` no longer replaces an unreadable `settings.json` with defaults; it refuses and changes nothing. Values it
+  drops are reported.
+- Settings moved from `%ProgramData%\BetterBanner` (where a standard user could create the folder first and keep
+  control of it) to `%ProgramFiles%\BetterBanner`. Beta testers: run `install` again with your options.
+- `install` no longer stops other signed-in users' banners. The exe is replaced in place and every running banner
+  restarts itself into the new version.
+- `install`, `config` and `uninstall` ask for administrator rights (UAC) instead of failing, so *Uninstall* from
+  *Apps & features* works.
+- A long banner text no longer runs into the clock; it is shortened with "..." instead.
+- `/settings` (or any argument starting with `/s`, `/p`, `/c`) is no longer mistaken for a screen-saver switch, and an
+  option is never taken as the previous option's value (`--caption --quiet`).
+
+### Changed
+- When no valid classification level is configured, the banner shows a grey "CLASSIFICATION NOT SET - CONTACT YOUR
+  ADMINISTRATOR" instead of UNCLASSIFIED. The first `install` requires `--level`.
+
+## [1.0.0-beta.1] - 2026-10-07
+
 ### Added
 - Classification banner on the top, bottom or both edges of every monitor, docked as a shell app bar so maximized
   windows stop at it.

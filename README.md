@@ -46,9 +46,10 @@ From an **elevated** Command Prompt or PowerShell:
 start /wait BetterBanner.exe install --level SECRET
 ```
 
-This copies the program to `C:\Program Files\BetterBanner`, saves settings to
-`C:\ProgramData\BetterBanner\settings.json` (only administrators can change it), adds it to Control Panel and
-*Apps & features*, starts it for every user at sign-in, and starts it now for you.
+This copies the program to `C:\Program Files\BetterBanner`, saves settings next to it in `settings.json` (only
+administrators can change anything there), adds it to Control Panel and *Apps & features*, starts it for every user at
+sign-in, and starts it now for you. The first install must name a level (`--level`). Running `install` again upgrades in
+place: banners already running for other signed-in users restart themselves into the new version within seconds.
 
 After that, change settings from **Control Panel > Better Banner**, from the banner's right-click menu
 (*Settings...*), or from the command line. Saving asks for administrator approval.
@@ -72,6 +73,9 @@ BetterBanner.exe show
 start /wait BetterBanner.exe uninstall
 ```
 
+> `install`, `config` and `uninstall` need administrator rights and ask for them (UAC) if needed, so *Uninstall* in
+> *Apps & features* works for standard users with admin credentials.
+>
 > `start /wait` makes the prompt wait for the result; `BetterBanner.exe` is a windowed program so the banner never
 > flashes a console window. Exit codes: `0` OK, `1` error, `2` bad arguments, `5` not run as administrator.
 
@@ -98,7 +102,13 @@ allow-listing tools (AppLocker, WDAC) need a rule for it. A hash rule using the 
 ## Settings
 
 Settings come from built-in defaults, then `settings.json`, then Group Policy
-(`HKLM\SOFTWARE\Policies\BetterBanner`). Invalid values are ignored and logged, so a bad setting never breaks the banner.
+(`HKLM\SOFTWARE\Policies\BetterBanner`). Each value is checked on its own: an invalid value is skipped and logged
+(and shown by `BetterBanner.exe show`) without affecting the others. `settings.json` accepts the same spellings as the
+command line, e.g. `"Level": "S"`.
+
+If no valid classification level is configured at all (no settings, an unreadable `settings.json`, or an invalid
+`Level`), the banner shows a grey **CLASSIFICATION NOT SET - CONTACT YOUR ADMINISTRATOR** rather than defaulting to a
+marking nobody chose. `config` refuses to overwrite a `settings.json` it can't read.
 
 | Setting | Default | Description |
 |---|---|---|

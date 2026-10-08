@@ -84,20 +84,106 @@ public class SettingsTests
     {
         var loaded = SettingsLoader.Load(null, new FakePolicy(new() { ["Level"] = "PURPLE", ["FontSize"] = "huge", ["Nope"] = "1" }));
 
-        Assert.Equal(ClassificationLevel.Unclassified, loaded.Settings.Level);
-        Assert.Equal(3, loaded.Warnings.Count);
+        Assert.Equal(3, loaded.Warnings.Count(w => w.StartsWith("Ignoring invalid policy value")));
+        Assert.True(loaded.Settings.LevelNotConfigured);
     }
 
-    [Fact]
-    public void Corrupt_settings_file_falls_back_to_defaults()
+    private static LoadedSettings LoadJson(string json, IPolicySource? policy = null)
     {
         var path = Path.GetTempFileName();
         try
         {
-            File.WriteAllText(path, "{ not json");
-            var loaded = SettingsLoader.Load(path, null);
-            Assert.Equal(ClassificationLevel.Unclassified, loaded.Settings.Level);
-            Assert.Single(loaded.Warnings);
+            File.WriteAllText(path, json);
+            return SettingsLoader.Load(path, policy);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>Tester's bug: "Level": "S" (documented as accepted) plus one bad value reset the whole file to UNCLASSIFIED.</summary>
+    [Fact]
+    public void One_bad_value_does_not_discard_the_rest_of_the_file()
+    {
+        var loaded = LoadJson("""{ "Level": "S", "Caption": "SECRET//NOFORN", "FontSize": "huge", "ClockEnabled": true }""");
+
+        Assert.Equal(ClassificationLevel.Secret, loaded.Settings.Level);
+        Assert.Equal("SECRET//NOFORN", loaded.Settings.EffectiveCaption);
+        Assert.True(loaded.Settings.ClockEnabled);
+        Assert.Equal(10, loaded.Settings.FontSize);
+        Assert.Contains(loaded.Warnings, w => w.Contains("FontSize"));
+        Assert.False(loaded.Settings.LevelNotConfigured);
+    }
+
+    [Theory]
+    [InlineData("""{ "Level": "S" }""")]
+    [InlineData("""{ "level": "secret" }""")]
+    [InlineData("""{ "Level": "Secret", }""")]
+    public void Settings_file_accepts_the_same_spellings_as_the_command_line(string json)
+    {
+        Assert.Equal(ClassificationLevel.Secret, LoadJson(json).Settings.Level);
+    }
+
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("[1, 2]")]
+    [InlineData("")]
+    public void Unreadable_settings_file_never_shows_a_marking_nobody_chose(string json)
+    {
+        var loaded = LoadJson(json);
+
+        Assert.True(loaded.Settings.LevelNotConfigured);
+        Assert.Equal(BannerSettings.NotConfiguredCaption, loaded.Settings.EffectiveCaption);
+        Assert.NotEqual(ClassificationPresets.Get(ClassificationLevel.Unclassified).Background, loaded.Settings.EffectiveBackColor);
+    }
+
+    [Fact]
+    public void Numeric_level_is_rejected_as_ambiguous()
+    {
+        Assert.True(LoadJson("""{ "Level": 3 }""").Settings.LevelNotConfigured);
+    }
+
+    [Fact]
+    public void Invalid_level_in_the_file_shows_not_configured_instead_of_unclassified()
+    {
+        var loaded = LoadJson("""{ "Level": "PURPLE", "Caption": "SECRET" }""");
+        Assert.True(loaded.Settings.LevelNotConfigured);
+        Assert.Equal(BannerSettings.NotConfiguredCaption, loaded.Settings.EffectiveCaption);
+    }
+
+    [Fact]
+    public void No_settings_at_all_is_not_configured()
+    {
+        Assert.True(SettingsLoader.Load(null, null).Settings.LevelNotConfigured);
+    }
+
+    [Fact]
+    public void Policy_level_alone_is_enough()
+    {
+        var loaded = SettingsLoader.Load(null, new FakePolicy(new() { ["Level"] = "TS" }));
+        Assert.False(loaded.Settings.LevelNotConfigured);
+        Assert.Equal("TOP SECRET", loaded.Settings.EffectiveCaption);
+    }
+
+    [Fact]
+    public void Invalid_policy_level_falls_back_to_the_file_level()
+    {
+        var loaded = LoadJson("""{ "Level": "Secret" }""", new FakePolicy(new() { ["Level"] = "PURPLE" }));
+        Assert.False(loaded.Settings.LevelNotConfigured);
+        Assert.Equal(ClassificationLevel.Secret, loaded.Settings.Level);
+    }
+
+    [Fact]
+    public void Load_file_reports_unreadable_so_config_can_refuse_to_overwrite_it()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "{ broken");
+            var file = SettingsLoader.LoadFile(path);
+            Assert.True(file.Exists);
+            Assert.True(file.Unreadable);
         }
         finally
         {

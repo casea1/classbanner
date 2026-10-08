@@ -39,6 +39,10 @@ internal sealed unsafe class BannerHost : Win32Window
     private int _nextId;
     private int _repositionStreak;
     private string _lastReconcileReason = "";
+    private readonly string? _installId = ReadInstallId();
+
+    /// <summary>Set when a newer version was installed; Program restarts the banner after the message loop ends.</summary>
+    public static bool RestartRequested { get; private set; }
 
     public BannerHost()
     {
@@ -125,6 +129,7 @@ internal sealed unsafe class BannerHost : Win32Window
         switch (id)
         {
             case TimerReconcile:
+                if (CheckForUpgrade()) break;
                 Reconcile();
                 foreach (var banner in _banners) banner.KeepOnTop();
                 break;
@@ -142,6 +147,30 @@ internal sealed unsafe class BannerHost : Win32Window
             case TimerSettings:
                 ReloadSettings();
                 break;
+        }
+    }
+
+    /// <summary>After "install" replaces the exe, restart into the new version in this user's own session.</summary>
+    private bool CheckForUpgrade()
+    {
+        var current = ReadInstallId();
+        if (current is null || current == _installId) return false;
+        Log.Info("A new version was installed; restarting.");
+        RestartRequested = true;
+        Destroy();
+        return true;
+    }
+
+    private static string? ReadInstallId()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(Installer.StateKey);
+            return key?.GetValue(Installer.InstallIdValue) as string;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return null;
         }
     }
 

@@ -489,6 +489,10 @@ internal static unsafe partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool AttachConsole(int processId);
 
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CloseHandle(nint handle);
+
     // ---- settings window (standard controls) ----
     public const uint WS_OVERLAPPED = 0x00000000;
     public const uint WS_SYSMENU = 0x00080000;
