@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-beta.3] - 2026-10-08
+
 ### Fixed
 - `config`, the settings window and a running banner no longer turn "classification not set" into UNCLASSIFIED: the
   level is now simply absent until someone chooses one, `config` refuses to save without one, and the settings window
