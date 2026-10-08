@@ -44,14 +44,18 @@ internal sealed class SettingsWindow : Win32Window
     /// <summary>A label + control (or a full-width control) laid out top to bottom.</summary>
     private sealed record Row(nint Label, nint Control, int Lines = 1, nint Extra = 0);
 
-    private SettingsWindow()
+    /// <summary>Setup mode: shown when the downloaded exe is double-clicked; "Install" runs the elevated install.</summary>
+    private bool _setup;
+
+    private SettingsWindow(bool setup)
     {
+        _setup = setup;
         var loaded = RegistryPolicySource.LoadEffective();
         _initial = loaded.Settings;
         _policyKeys = new RegistryPolicySource().ReadValues().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         CreateWindow(ClassName, 0, ExStyle, Style, 0, 0, 100, 100, GetSysColorBrush(COLOR_BTNFACE));
-        SetWindowTextW(Handle, "Better Banner Settings");
+        SetWindowTextW(Handle, setup ? "Better Banner Setup" : "Better Banner Settings");
         _dpi = (int)GetDpiForWindow(Handle);
 
         CreateControls();
@@ -73,17 +77,20 @@ internal sealed class SettingsWindow : Win32Window
         SetForegroundWindow(Handle);
     }
 
-    public static int Run()
+    public static int Run(bool setup = false)
     {
-        var window = new SettingsWindow();
+        var window = new SettingsWindow(setup);
         return RunMessageLoop(window.Handle);
     }
 
     private void CreateControls()
     {
-        _policyNote = Static(_policyKeys.Count > 0
-            ? "Some settings are managed by Group Policy and can't be changed here."
-            : "Changes apply to every user of this computer.");
+        _policyNote = Static(_setup
+            ? (Installer.IsInstalled ? "Better Banner is installed. Click Upgrade to update it to this version."
+                                     : "Choose the settings, then click Install. Applies to every user of this computer.")
+            : _policyKeys.Count > 0
+                ? "Some settings are managed by Group Policy and can't be changed here."
+                : "Changes apply to every user of this computer.");
 
         _level = AddRow("Classification:", Combo(Levels.Select(l => l.Name)), nameof(BannerSettings.Level));
         _caption = AddRow("Banner text:", Edit(), nameof(BannerSettings.Caption));
@@ -107,7 +114,7 @@ internal sealed class SettingsWindow : Win32Window
         Lock(_noticeText, nameof(BannerSettings.LogonNoticeText));
 
         _status = Static("");
-        _save = Button("Save", IdOk, BS_DEFPUSHBUTTON);
+        _save = Button(_setup ? (Installer.IsInstalled ? "Upgrade" : "Install") : "Save", IdOk, BS_DEFPUSHBUTTON);
         _cancel = Button("Close", IdCancel, BS_PUSHBUTTON);
     }
 
@@ -310,7 +317,7 @@ internal sealed class SettingsWindow : Win32Window
             return;
         }
 
-        var args = new List<string> { "config", "--quiet" };
+        var args = new List<string> { _setup ? "install" : "config", "--quiet" };
         foreach (var (key, value) in ChangedValues())
         {
             args.Add("--set");
@@ -358,14 +365,24 @@ internal sealed class SettingsWindow : Win32Window
         EnableWindow(_save, true);
         var message = code switch
         {
+            0 when _setup => "Installed. It's in the Start menu and Control Panel and starts at every sign-in.",
             0 => "Saved. Banners update within a few seconds.",
+            SaveCancelled when _setup => "Not installed: administrator approval was cancelled.",
             SaveCancelled => "Not saved: administrator approval was cancelled.",
             SaveFailedToStart => "Not saved: " + _saveError,
             ExitCodes.BadArguments => "Not saved: a value was rejected. Check the classification and text size.",
             _ => $"Not saved (error {code}). See {Log.FilePath}.",
         };
         SetWindowTextW(_status, message);
-        if (code == 0) _initial = RegistryPolicySource.LoadEffective().Settings;
+        if (code != 0) return;
+        _initial = RegistryPolicySource.LoadEffective().Settings;
+        if (_setup)
+        {
+            // From now on this window edits the installed settings.
+            _setup = false;
+            SetWindowTextW(Handle, "Better Banner Settings");
+            SetWindowTextW(_save, "Save");
+        }
     }
 
     // ---- control helpers ----
