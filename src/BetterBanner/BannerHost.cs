@@ -45,6 +45,9 @@ internal sealed unsafe class BannerHost : Win32Window
     /// <summary>Set when a newer version was installed; Program restarts the banner after the message loop ends.</summary>
     public static bool RestartRequested { get; private set; }
 
+    /// <summary>Set when the user picked Exit on the menu (only offered when AllowUserExit is on).</summary>
+    public static bool UserChoseExit { get; private set; }
+
     public BannerHost()
     {
         _loaded = RegistryPolicySource.LoadEffective();
@@ -302,7 +305,10 @@ internal sealed unsafe class BannerHost : Win32Window
                 case MenuRecover: RecoverWindows(); break;
                 case MenuAbout: ShowAbout(); break;
                 case MenuSettings: OpenSettings(); break;
-                case MenuExit: Destroy(); break;
+                case MenuExit:
+                    UserChoseExit = true;
+                    Destroy();
+                    break;
             }
         }
         finally

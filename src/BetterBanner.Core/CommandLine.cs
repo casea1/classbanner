@@ -14,6 +14,9 @@ public enum CommandKind
     ScreenSaverShow,
     ScreenSaverPreview,
     ScreenSaverConfigure,
+
+    /// <summary>Run as the Windows service that keeps a banner in every signed-in session (started by Windows).</summary>
+    Service,
 }
 
 public sealed record ParsedCommand(
@@ -22,7 +25,8 @@ public sealed record ParsedCommand(
     bool Quiet = false,
     bool NoStart = false,
     bool KeepSettings = false,
-    string? Error = null);
+    string? Error = null,
+    bool Managed = false);
 
 /// <summary>Parses the single-exe command line. Friendly options map onto <see cref="SettingKeys"/> names.</summary>
 public static partial class CommandLine
@@ -54,7 +58,7 @@ public static partial class CommandLine
           --logon-title <text>            Notice users must acknowledge before signing in
           --logon-text <text>             ("" for both removes the notice)
           --set <Name>=<Value>            Any setting, e.g. --set FontSize=12 (see README)
-          --no-start                      Don't start the banner after installing
+          --no-start                      Don't start the banner service now (it starts at the next restart)
           --quiet                         No output except errors
 
         Values can also be written --option=value (e.g. --logon-text="-- Authorized use only --").
@@ -106,6 +110,7 @@ public static partial class CommandLine
             "config" or "configure" => CommandKind.Config,
             "show" or "status" => CommandKind.Show,
             "banner" or "run" => CommandKind.Run,
+            "service" => CommandKind.Service,
             "settings" => CommandKind.Settings,
             "help" or "-h" or "--help" or "-?" => CommandKind.Help,
             "version" or "--version" => CommandKind.Version,
@@ -114,7 +119,7 @@ public static partial class CommandLine
         if (kind is null) return Fail($"Unknown command '{first}'.");
 
         var settings = new List<KeyValuePair<string, string>>();
-        bool quiet = false, noStart = false, keepSettings = false;
+        bool quiet = false, noStart = false, keepSettings = false, managed = false;
 
         for (var i = 1; i < args.Count; i++)
         {
@@ -169,6 +174,7 @@ public static partial class CommandLine
                     case "--quiet": case "-q": Flag(ref quiet); break;
                     case "--no-start": Flag(ref noStart); break;
                     case "--keep-settings": Flag(ref keepSettings); break;
+                    case "--managed" when kind == CommandKind.Run: Flag(ref managed); break;
                     default: return Fail($"Unknown option '{arg}'.");
                 }
             }
@@ -191,7 +197,7 @@ public static partial class CommandLine
                     : $"Unknown setting '{name}'.");
         }
 
-        return new ParsedCommand(kind.Value, settings, quiet, noStart, keepSettings);
+        return new ParsedCommand(kind.Value, settings, quiet, noStart, keepSettings, Managed: managed);
     }
 
     private static ParsedCommand Fail(string error) => new(CommandKind.Help, [], Error: error);
@@ -199,7 +205,7 @@ public static partial class CommandLine
     private static readonly HashSet<string> Options = new(StringComparer.OrdinalIgnoreCase)
     {
         "--level", "--caption", "--position", "--clock", "--zulu", "--logon-title", "--logon-text", "--set",
-        "--quiet", "-q", "--no-start", "--keep-settings",
+        "--quiet", "-q", "--no-start", "--keep-settings", "--managed",
     };
 
     /// <summary>True for our own options, alone or in "--option=value" form.</summary>

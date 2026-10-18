@@ -41,16 +41,18 @@ jobs:
       - name: Publish native exe
         run: dotnet publish src/BetterBanner/BetterBanner.csproj -c Release -o publish
 
-      - name: Download v1.0.0-beta.1 for the upgrade test
+      - name: Download earlier releases for the upgrade tests
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release download v1.0.0-beta.1 --pattern BetterBanner.exe --dir beta1
+        run: |
+          gh release download v1.0.0-beta.1 --pattern BetterBanner.exe --dir beta1
+          gh release download v1.1.0 --pattern BetterBanner.exe --dir v110
 
-      - name: Smoke test (upgrade from beta.1, install, run, uninstall)
+      - name: Smoke test (upgrades, install, service restart, uninstall)
         shell: pwsh
-        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe -Beta1Exe beta1/BetterBanner.exe
+        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe -Beta1Exe beta1/BetterBanner.exe -PreviousExe v110/BetterBanner.exe
 
       - uses: actions/upload-artifact@v6
         if: always()
