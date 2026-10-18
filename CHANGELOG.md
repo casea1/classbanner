@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.2.0] - unreleased
+## [1.2.0] - 2026-10-18
 
 ### Added
 - `uninstall` gives every profile its own title-bar colors, wallpaper and screen saver back (saved before the banner
