@@ -29,6 +29,43 @@ public static class ClassificationPresets
 
     public static ClassificationPreset Get(ClassificationLevel level) => Presets[level];
 
+    /// <summary>
+    /// The level a caption claims: the level whose standard marking the caption (trimmed, upper-cased) equals or starts
+    /// with, followed by "//" or a space. The longest marking wins, so "TOP SECRET//SCI//NOFORN" is TS/SCI, not TS.
+    /// Null when it starts with no standard marking (e.g. "SEKRET").
+    /// </summary>
+    public static ClassificationLevel? LevelOfCaption(string caption)
+    {
+        var text = caption.Trim().ToUpperInvariant();
+        ClassificationPreset? best = null;
+        foreach (var preset in Presets.Values)
+        {
+            if (StartsWithMarking(text, preset.Caption) && (best is null || preset.Caption.Length > best.Caption.Length))
+                best = preset;
+        }
+        return best?.Level;
+    }
+
+    private static bool StartsWithMarking(string text, string marking) =>
+        text == marking || text.StartsWith(marking + "//", StringComparison.Ordinal) || text.StartsWith(marking + " ", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Why <paramref name="caption"/> can't be shown for <paramref name="level"/>, or null when it can. A custom caption
+    /// must keep the level's marking first (e.g. SECRET//NOFORN for SECRET) and must not read as another level.
+    /// </summary>
+    public static string? CaptionProblem(ClassificationLevel level, string? caption)
+    {
+        if (string.IsNullOrWhiteSpace(caption)) return null;
+        var marking = Get(level).Caption;
+        var claimed = LevelOfCaption(caption);
+        if (claimed == level) return null;
+        var reason = claimed is { } other
+            ? $"it reads as {Get(other).Caption}"
+            : "it doesn't start with the classification marking";
+        return $"Banner text '{caption.Trim()}' doesn't match the classification {marking}: {reason}. " +
+               $"It must be {marking} or start with \"{marking}//\" or \"{marking} \" (e.g. {marking}//NOFORN).";
+    }
+
     public static IEnumerable<ClassificationPreset> All => Presets.Values;
 
     /// <summary>

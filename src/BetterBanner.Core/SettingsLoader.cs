@@ -30,11 +30,12 @@ public static class SettingsLoader
         var settings = file.Settings;
 
         var fromPolicy = false;
+        IReadOnlyDictionary<string, string> values = new Dictionary<string, string>();
         if (policy is not null)
         {
             try
             {
-                var values = policy.ReadValues();
+                values = policy.ReadValues();
                 fromPolicy = values.Count > 0;
                 foreach (var name in SettingKeys.ApplyAll(settings, values))
                     warnings.Add($"Ignoring invalid policy value '{name}'.");
@@ -47,9 +48,30 @@ public static class SettingsLoader
 
         // Never fall back to a marking nobody chose: an unknown level shows "CLASSIFICATION NOT SET" instead.
         if (settings.LevelNotConfigured) warnings.Add("No valid classification level is configured; the banner shows CLASSIFICATION NOT SET.");
+        CheckMarking(settings, values, warnings);
 
         settings.Normalize();
         return new LoadedSettings(settings, warnings, fromPolicy);
+    }
+
+    /// <summary>
+    /// A caption that contradicts the level is dropped (the standard marking is shown instead), wherever it came from.
+    /// Custom colors that differ from the level's standard colors are kept but reported.
+    /// </summary>
+    private static void CheckMarking(BannerSettings settings, IReadOnlyDictionary<string, string> policy, List<string> warnings)
+    {
+        if (settings.Level is not { } level) return;
+        string Source(string name) => policy.ContainsKey(name) ? "Group Policy" : "the settings file";
+
+        if (ClassificationPresets.CaptionProblem(level, settings.Caption) is { } problem)
+        {
+            warnings.Add($"Ignoring Caption from {Source(nameof(BannerSettings.Caption))}. {problem} The banner shows {settings.Preset.Caption}.");
+            settings.Caption = null;
+        }
+        if (RgbColor.TryParse(settings.BackColor, out var back) && back != settings.Preset.Background)
+            warnings.Add($"BackColor {back} (from {Source(nameof(BannerSettings.BackColor))}) is not the standard {settings.Preset.Caption} color {settings.Preset.Background}.");
+        if (RgbColor.TryParse(settings.ForeColor, out var fore) && fore != settings.Preset.Foreground)
+            warnings.Add($"ForeColor {fore} (from {Source(nameof(BannerSettings.ForeColor))}) is not the standard {settings.Preset.Caption} text color {settings.Preset.Foreground}.");
     }
 
     /// <summary>The settings file alone (what <c>config</c> edits), without policy. Bad values are skipped and reported.</summary>

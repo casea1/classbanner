@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - unreleased
+
+### Fixed
+- The banner text can no longer contradict the classification (#18). It must be the level's marking or start with it
+  followed by `//` or a space (`SECRET//NOFORN` for SECRET; `TOP SECRET//SCI...` only for TS/SCI). `install`, `config`
+  (exit 2) and the settings window refuse anything else and name the expected prefix; a bad caption in `settings.json`
+  or Group Policy is ignored, the standard marking is shown, and `show` and the log warn. Custom colors that differ
+  from the level's standard colors are reported the same way.
+
 ## [1.1.0] - 2026-10-08
 
 ### Added

@@ -106,6 +106,12 @@ Invoke-Banner @('config', '--logon-text', '-- Authorized use only --', '--quiet'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ($notice.legalnoticetext -eq '-- Authorized use only --') 'value starting with -- accepted'
 
+# Banner text that contradicts the level is refused (issue #18), including after a level change.
+Invoke-Banner @('config', '--caption', 'UNCLASSIFIED', '--quiet') -ExpectedExitCode 2
+Invoke-Banner @('config', '--level', 'C', '--quiet') -ExpectedExitCode 2
+$settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
+Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN') 'caption contradicting the level refused'
+
 # config never saves a level nobody chose (issue #6), and never removes the notice unless told to.
 $good = Get-Content $settingsFile -Raw
 Set-Content $settingsFile '{ "Level": "Sekret", "Caption": "SECRET//NOFORN" }'
