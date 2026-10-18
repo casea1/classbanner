@@ -317,6 +317,15 @@ internal sealed class SettingsWindow : Win32Window
             return;
         }
 
+        // Banner text must keep the chosen level's marking first (issue #18); say so here instead of after the UAC prompt.
+        var levelIndex = (int)SendMessage(_level, CB_GETCURSEL, 0, 0);
+        if (levelIndex >= 0 && !_policyKeys.Contains(nameof(BannerSettings.Caption)) &&
+            ClassificationPresets.CaptionProblem(Levels[levelIndex].Level, GetWindowText(_caption)) is { } problem)
+        {
+            SetWindowTextW(_status, problem);
+            return;
+        }
+
         var args = new List<string> { _setup ? "install" : "config", "--quiet" };
         foreach (var (key, value) in ChangedValues())
         {

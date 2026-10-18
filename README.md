@@ -121,8 +121,8 @@ first `install` and removes the old folder.
 | Setting | Default | Description |
 |---|---|---|
 | `Level` | `Unclassified` | `Unclassified`, `Cui`, `Confidential`, `Secret`, `TopSecret`, `TopSecretSci` (also accepts `U`, `C`, `S`, `TS`, `TS/SCI`) |
-| `Caption` | *(standard)* | Custom banner text, e.g. `SECRET//NOFORN` |
-| `BackColor`, `ForeColor` | *(standard)* | `#RRGGBB` overrides |
+| `Caption` | *(standard)* | Custom banner text, e.g. `SECRET//NOFORN`. Must be the level's marking or start with it followed by `//` or a space; anything else is refused by `install`/`config`/the settings window, and ignored with a warning (standard marking shown) when it comes from `settings.json` or Group Policy |
+| `BackColor`, `ForeColor` | *(standard)* | `#RRGGBB` overrides. Colors other than the level's standard ones are applied, with a warning in `show` and the log |
 | `Position` | `Both` | `Top`, `Bottom`, `Both` |
 | `FontSize` | `10` | Points, 8-36. Scaled per monitor for display scaling |
 | `HoverTransparency` | `40` | Percent see-through while the mouse is over the banner (0-90) |

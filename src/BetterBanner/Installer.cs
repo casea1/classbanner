@@ -237,18 +237,26 @@ internal static class Installer
         foreach (var warning in file.Warnings) output.Line($"Warning: {warning} (removed when saving)");
         var settings = file.Settings;
         SettingKeys.ApplyAll(settings, cmd.Settings);
-        if (settings.Level is null && !PolicyProvidesLevel())
+        var policy = new RegistryPolicySource().ReadValues();
+        var policyLevel = policy.TryGetValue(nameof(BannerSettings.Level), out var text) && ClassificationPresets.TryParseLevel(text, out var parsed)
+            ? parsed : (ClassificationLevel?)null;
+        if (settings.Level is null && policyLevel is null)
         {
             output.Error("No classification level is configured for this computer. Add --level, e.g. --level SECRET (U, CUI, C, S, TS or TS/SCI). Nothing was changed.");
             failure = ExitCodes.BadArguments;
             return null;
         }
+
+        // Never save banner text that contradicts the level (issue #18). Group Policy's level wins, so check against it.
+        var level = policyLevel ?? settings.Level!.Value;
+        if (!policy.ContainsKey(nameof(BannerSettings.Caption)) && ClassificationPresets.CaptionProblem(level, settings.Caption) is { } problem)
+        {
+            output.Error($"{problem} Nothing was changed.");
+            failure = ExitCodes.BadArguments;
+            return null;
+        }
         return settings;
     }
-
-    private static bool PolicyProvidesLevel() =>
-        new RegistryPolicySource().ReadValues().TryGetValue(nameof(BannerSettings.Level), out var level) &&
-        ClassificationPresets.TryParseLevel(level, out _);
 
     private static void SaveSettings(BannerSettings settings, Output output)
     {
