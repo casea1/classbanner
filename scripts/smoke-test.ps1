@@ -29,6 +29,9 @@ function Assert($Condition, [string] $Message) {
     throw "FAILED: $Message"
 }
 
+$dwmKey = 'HKCU:\SOFTWARE\Microsoft\Windows\DWM'
+if (-not (Test-Path $dwmKey)) { New-Item $dwmKey | Out-Null }
+Set-ItemProperty $dwmKey ColorPrevalence 0 -Type DWord
 $size = (Get-Item $Exe).Length / 1MB
 Write-Host ("BetterBanner.exe is {0:N2} MB" -f $size)
 Assert ($size -lt 15) 'exe is small'
@@ -57,6 +60,9 @@ function Test-UpgradeFrom([string] $OldExe, [string] $Label) {
     Invoke-Banner @('uninstall')
     Start-Sleep -Seconds 1
     Assert (-not (Test-Path $installDir)) "clean slate after the $Label upgrade test"
+    # The old banner colored this profile's title bars and saved nothing; uninstall switches that off (issue #19).
+    $dwm = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\DWM' -ErrorAction SilentlyContinue
+    Assert ($dwm.ColorPrevalence -ne 1) "$Label classification accent removed from title bars by uninstall"
 }
 if ($Beta1Exe) { Test-UpgradeFrom $Beta1Exe 'beta.1' }
 if ($PreviousExe) { Test-UpgradeFrom $PreviousExe '1.1.0' }
@@ -174,6 +180,10 @@ if (-not $signedIn) {
     Assert ($second.WaitForExit(5000)) 'second instance exits (single instance per session)'
 
     # Upgrading in place: the service and its banners are stopped, the exe replaced, and new banners started.
+    # The banner saved this profile's own values before coloring the title bars (issue #19).
+    Assert ((Get-ItemProperty $dwmKey).ColorPrevalence -eq 1) 'title bars colored'
+    Assert (Test-Path 'HKCU:\Software\BetterBanner\Saved') "user's own values saved"
+
     Invoke-Banner @('install', '--quiet')
     $upgraded = Wait-SessionBanner -ExceptId $restarted[0].Id
     Assert ($upgraded.Count -eq 1 -and $upgraded[0].Id -ne $restarted[0].Id) 'exactly one new banner running after upgrade'
@@ -187,6 +197,10 @@ Assert (-not (Test-Path $installDir)) 'install folder and settings removed'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) 'sign-in notice cleared'
 Assert ($null -eq (Get-Service BetterBanner -ErrorAction SilentlyContinue)) 'service removed'
+if ($signedIn) {
+    Assert ((Get-ItemProperty $dwmKey).ColorPrevalence -eq 0) "uninstall restored the user's own title bar setting"
+    Assert (-not (Test-Path 'HKCU:\Software\BetterBanner\Saved')) 'saved values removed'
+}
 Assert ((Get-Banners).Count -eq 0) 'no banners left running'
 Assert (-not (Test-Path $cpl)) 'removed from Control Panel'
 Assert (-not (Test-Path $shortcut)) 'Start menu entry removed'

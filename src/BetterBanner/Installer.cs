@@ -112,6 +112,7 @@ internal static class Installer
         ServiceControl.Stop(BannerService.Name);
         ServiceControl.Delete(BannerService.Name);
         StopRunningBanners(onlyInstalledCopies: false);
+        var userSettings = cmd.KeepUserSettings ? null : RestoreUserSettings();
         using (var run = Registry.LocalMachine.OpenSubKey(RunKey, writable: true)) run?.DeleteValue(AppName, throwOnMissingValue: false);
         Registry.LocalMachine.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false);
         Registry.LocalMachine.DeleteSubKeyTree(ControlPanelNamespaceKey, throwOnMissingSubKey: false);
@@ -150,8 +151,37 @@ internal static class Installer
             }
         }
 
-        output.Line("Better Banner uninstalled. Colors, wallpaper and screen saver already applied to user profiles are left as they are.");
+        output.Line("Better Banner uninstalled.");
+        if (userSettings is null)
+        {
+            output.Line("Colors, wallpaper and screen saver applied to user profiles were left as they are (--keep-user-settings).");
+        }
+        else
+        {
+            output.Line($"User colors, wallpaper and screen saver: restored in {userSettings.Restored} profile(s), reset in {userSettings.Reset} " +
+                        "profile(s) changed by an earlier version. Users signed in now see all of it at their next sign-in.");
+            foreach (var failure in userSettings.Failed) output.Line($"Warning: could not restore {failure}");
+        }
         return ExitCodes.Ok;
+    }
+
+    /// <summary>Puts back each profile's own colors, wallpaper and screen saver (issue #19). Never fails the uninstall.</summary>
+    private static UserProfiles.Summary RestoreUserSettings()
+    {
+        try
+        {
+            var settings = RegistryPolicySource.LoadEffective().Settings;
+            var custom = RgbColor.TryParse(settings.BackColor, out var back) ? new[] { back } : [];
+            var summary = UserProfiles.RestoreAll(custom);
+            // This session's title bars follow straight away; other sessions at their next sign-in.
+            SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "ImmersiveColorSet", SMTO_ABORTIFHUNG, 1000, out _);
+            return summary;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Could not restore user settings", ex);
+            return new UserProfiles.Summary(0, 0, [ex.Message]);
+        }
     }
 
     public static int Show(Output output)

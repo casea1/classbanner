@@ -32,6 +32,11 @@ internal sealed class SettingsWindow : Win32Window
     private BannerSettings _initial;
     private volatile string? _saveError;
     private readonly HashSet<string> _policyKeys;
+    private readonly List<(nint Control, string Key)> _locks = [];
+    private string _policySnapshot;
+    private bool _statusIsProblem;
+    private const nuint TimerPolicy = 1;
+    private const uint PolicyCheckMs = 5000;
     private readonly List<Row> _rows = [];
     private nint _font;
     private nint _previewBrush;
@@ -52,15 +57,19 @@ internal sealed class SettingsWindow : Win32Window
         _setup = setup;
         var loaded = RegistryPolicySource.LoadEffective();
         _initial = loaded.Settings;
-        _policyKeys = new RegistryPolicySource().ReadValues().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var policy = new RegistryPolicySource().ReadValues();
+        _policyKeys = policy.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _policySnapshot = Snapshot(policy);
 
         CreateWindow(ClassName, 0, ExStyle, Style, 0, 0, 100, 100, GetSysColorBrush(COLOR_BTNFACE));
         SetWindowTextW(Handle, setup ? "Better Banner Setup" : "Better Banner Settings");
         _dpi = (int)GetDpiForWindow(Handle);
 
         CreateControls();
-        LoadValues();
+        LoadValues(_initial);
         Layout();
+        // Group Policy can change while the window is open (issue #19); also checked on a policy broadcast and on Save.
+        SetTimer(Handle, TimerPolicy, PolicyCheckMs, 0);
 
         // Center on the monitor under the mouse.
         GetCursorPos(out var cursor);
@@ -88,9 +97,7 @@ internal sealed class SettingsWindow : Win32Window
         _policyNote = Static(_setup
             ? (Installer.IsInstalled ? "Better Banner is installed. Click Upgrade to update it to this version."
                                      : "Choose the settings, then click Install. Applies to every user of this computer.")
-            : _policyKeys.Count > 0
-                ? "Some settings are managed by Group Policy and can't be changed here."
-                : "Changes apply to every user of this computer.");
+            : SettingsNote());
 
         _level = AddRow("Classification:", Combo(Levels.Select(l => l.Name)), nameof(BannerSettings.Level));
         _caption = AddRow("Banner text:", Edit(), nameof(BannerSettings.Caption));
@@ -118,9 +125,47 @@ internal sealed class SettingsWindow : Win32Window
         _cancel = Button("Close", IdCancel, BS_PUSHBUTTON);
     }
 
-    private void LoadValues()
+    private string SettingsNote() => _policyKeys.Count > 0
+        ? "Some settings are managed by Group Policy and can't be changed here."
+        : "Changes apply to every user of this computer.";
+
+    private static string Snapshot(IReadOnlyDictionary<string, string> values) =>
+        string.Join('\n', values.OrderBy(v => v.Key, StringComparer.OrdinalIgnoreCase).Select(v => $"{v.Key}={v.Value}"));
+
+    /// <summary>
+    /// Re-reads Group Policy. When it changed, fields it now manages show its values and are locked; fields it no
+    /// longer manages are unlocked; what the user typed in fields that stay editable is kept. Returns true if it changed.
+    /// </summary>
+    private bool RefreshPolicy()
     {
-        var s = _initial;
+        var policy = new RegistryPolicySource().ReadValues();
+        var snapshot = Snapshot(policy);
+        if (snapshot == _policySnapshot) return false;
+
+        var edits = ChangedValues(all: true);
+        _policySnapshot = snapshot;
+        _policyKeys.Clear();
+        _policyKeys.UnionWith(policy.Keys);
+        _initial = RegistryPolicySource.LoadEffective().Settings;
+
+        var shown = _initial.Clone();
+        SettingKeys.ApplyAll(shown, edits.Where(e => !_policyKeys.Contains(e.Key)));
+        LoadValues(shown);
+        foreach (var (control, key) in _locks) EnableWindow(control, !_policyKeys.Contains(key));
+        if (!_setup) SetWindowTextW(_policyNote, SettingsNote());
+        InvalidatePreview();
+        Log.Info("Group Policy changed while the settings window was open; refreshed it.");
+        return true;
+    }
+
+    private void ShowProblem(string message)
+    {
+        SetWindowTextW(_status, message);
+        _statusIsProblem = true;
+    }
+
+    private void LoadValues(BannerSettings s)
+    {
         // Not configured: no selection (and a grey NOT SET preview) rather than a preselected UNCLASSIFIED.
         SendMessage(_level, CB_SETCURSEL, s.Level is { } level ? Array.FindIndex(Levels, l => l.Level == level) : -1, 0);
         SetWindowTextW(_caption, s.Caption ?? "");
@@ -165,12 +210,14 @@ internal sealed class SettingsWindow : Win32Window
             y += height + gap;
         }
 
-        y += gap;
-        int buttonWidth = S(88), buttonHeight = S(28);
+        // The status gets its own full-width row, three lines tall, so a long message is never cut off (issue #19).
         var right = margin + labelWidth + gap + controlWidth;
+        Place(_status, margin, y, right - margin, S(54));
+        y += S(54) + gap;
+
+        int buttonWidth = S(88), buttonHeight = S(28);
         Place(_cancel, right - buttonWidth, y, buttonWidth, buttonHeight);
         Place(_save, right - 2 * buttonWidth - gap, y, buttonWidth, buttonHeight);
-        Place(_status, margin, y + S(5), right - 2 * buttonWidth - 2 * gap - margin, rowHeight);
         y += buttonHeight + margin;
 
         var client = new RECT(0, 0, right + margin, y);
@@ -190,7 +237,27 @@ internal sealed class SettingsWindow : Win32Window
                 var code = HighWord(wParam);
                 if (id == IdOk && code == BN_CLICKED) Save();
                 else if (id == IdCancel && code == BN_CLICKED) Destroy();
-                else if (code is CBN_SELCHANGE or EN_CHANGE) InvalidatePreview();
+                else if (code is CBN_SELCHANGE or EN_CHANGE)
+                {
+                    InvalidatePreview();
+                    // A "choose a classification" or "banner text must start with..." message is stale once the user
+                    // changes something (issue #19).
+                    if (_statusIsProblem)
+                    {
+                        SetWindowTextW(_status, "");
+                        _statusIsProblem = false;
+                    }
+                }
+                return 0;
+
+            case WM_TIMER:
+                if ((nuint)wParam == TimerPolicy && RefreshPolicy())
+                    SetWindowTextW(_status, "Group Policy changed; the settings it manages were updated.");
+                return 0;
+
+            case WM_SETTINGCHANGE:
+                if (lParam != 0 && System.Runtime.InteropServices.Marshal.PtrToStringUni(lParam) is "Policy" or "BetterBanner" && RefreshPolicy())
+                    SetWindowTextW(_status, "Group Policy changed; the settings it manages were updated.");
                 return 0;
 
             case WM_PAINT:
@@ -305,15 +372,21 @@ internal sealed class SettingsWindow : Win32Window
 
     private void Save()
     {
+        if (RefreshPolicy())
+        {
+            ShowProblem("Group Policy changed while this window was open. Check the settings, then click Save again.");
+            return;
+        }
+
         var fontSize = GetWindowText(_fontSize).Trim();
         if (!int.TryParse(fontSize, out var size) || size is < 8 or > 36)
         {
-            SetWindowTextW(_status, "Text size must be between 8 and 36.");
+            ShowProblem("Text size must be between 8 and 36.");
             return;
         }
         if ((int)SendMessage(_level, CB_GETCURSEL, 0, 0) < 0 && !_policyKeys.Contains(nameof(BannerSettings.Level)))
         {
-            SetWindowTextW(_status, "Choose a classification first.");
+            ShowProblem("Choose a classification first.");
             return;
         }
 
@@ -322,7 +395,7 @@ internal sealed class SettingsWindow : Win32Window
         if (levelIndex >= 0 && !_policyKeys.Contains(nameof(BannerSettings.Caption)) &&
             ClassificationPresets.CaptionProblem(Levels[levelIndex].Level, GetWindowText(_caption)) is { } problem)
         {
-            SetWindowTextW(_status, problem);
+            ShowProblem(problem);
             return;
         }
 
@@ -337,6 +410,7 @@ internal sealed class SettingsWindow : Win32Window
         // painting, then report back with a posted message.
         EnableWindow(_save, false);
         SetWindowTextW(_status, "Saving...");
+        _statusIsProblem = false;
         _saveError = null;
         var hwnd = Handle;
         var commandLine = CommandLine.Join(args);
@@ -391,6 +465,7 @@ internal sealed class SettingsWindow : Win32Window
             _setup = false;
             SetWindowTextW(Handle, "Better Banner Settings");
             SetWindowTextW(_save, "Save");
+            SetWindowTextW(_policyNote, SettingsNote());
         }
     }
 
@@ -405,6 +480,7 @@ internal sealed class SettingsWindow : Win32Window
 
     private void Lock(nint control, string key)
     {
+        _locks.Add((control, key));
         if (_policyKeys.Contains(key)) EnableWindow(control, false);
     }
 

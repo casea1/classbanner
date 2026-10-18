@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.2.0] - unreleased
 
+### Added
+- `uninstall` gives every profile its own title-bar colors, wallpaper and screen saver back (saved before the banner
+  first changed them), and switches off what 1.1.0 changed in profiles where nothing was saved;
+  `--keep-user-settings` skips this (#19).
+
 ### Changed
 - The banner can no longer be ended and stay gone (#17). A new *Better Banner* Windows service (LocalSystem,
   automatic) replaces the `Run` key: it starts the banner in every signed-in session, starts it again about 2 seconds
@@ -16,6 +21,13 @@ All notable changes to this project are documented here. The format follows
   banner, including 1.1.0's, and the service starts the new ones; `--no-start` now means "don't start the service yet".
 
 ### Fixed
+- An open settings window follows Group Policy changes: fields it starts managing show the policy value and lock,
+  and Save re-checks policy first (#19).
+- An invalid `Level` in Group Policy shows CLASSIFICATION NOT SET instead of quietly using the local level (#19).
+- Command-line mistakes show the error first, then one line pointing at `BetterBanner.exe help`, instead of the whole
+  usage text with the error at the end (#19).
+- Setup/settings window: messages like "Choose a classification first." clear when you change something; the status
+  text has room for long messages; the intro no longer says "click Install" after installing (#19).
 - The banner text can no longer contradict the classification (#18). It must be the level's marking or start with it
   followed by `//` or a space (`SECRET//NOFORN` for SECRET; `TOP SECRET//SCI...` only for TS/SCI). `install`, `config`
   (exit 2) and the settings window refuse anything else and name the expected prefix; a bad caption in `settings.json`

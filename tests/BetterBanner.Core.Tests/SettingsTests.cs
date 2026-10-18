@@ -84,7 +84,8 @@ public class SettingsTests
     {
         var loaded = SettingsLoader.Load(null, new FakePolicy(new() { ["Level"] = "PURPLE", ["FontSize"] = "huge", ["Nope"] = "1" }));
 
-        Assert.Equal(3, loaded.Warnings.Count(w => w.StartsWith("Ignoring invalid policy value")));
+        Assert.Equal(2, loaded.Warnings.Count(w => w.StartsWith("Ignoring invalid policy value")));
+        Assert.Contains(loaded.Warnings, w => w.Contains("invalid Level 'PURPLE'"));
         Assert.True(loaded.Settings.LevelNotConfigured);
     }
 
@@ -167,11 +168,13 @@ public class SettingsTests
     }
 
     [Fact]
-    public void Invalid_policy_level_falls_back_to_the_file_level()
+    public void Invalid_policy_level_shows_not_set_instead_of_the_file_level()
     {
+        // Issue #19: a broken GPO level is not hidden behind the local level.
         var loaded = LoadJson("""{ "Level": "Secret" }""", new FakePolicy(new() { ["Level"] = "PURPLE" }));
-        Assert.False(loaded.Settings.LevelNotConfigured);
-        Assert.Equal(ClassificationLevel.Secret, loaded.Settings.Level);
+        Assert.True(loaded.Settings.LevelNotConfigured);
+        Assert.Equal(BannerSettings.NotConfiguredCaption, loaded.Settings.EffectiveCaption);
+        Assert.Contains(loaded.Warnings, w => w.Contains("Group Policy sets an invalid Level"));
     }
 
     [Fact]

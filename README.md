@@ -77,6 +77,18 @@ BetterBanner.exe show
 start /wait BetterBanner.exe uninstall
 ```
 
+**What uninstall puts back.** Before the banner first changes a user's title-bar/accent colors, wallpaper or screen
+saver, it saves that user's own values (`HKCU\Software\BetterBanner\Saved`). `uninstall` restores them in every
+profile on the computer: directly for users who are signed in, and by loading `NTUSER.DAT` for everyone else.
+Profiles changed by 1.1.0 or earlier, which saved nothing, have the classification accent on title bars turned off, the
+generated wallpaper removed and the Better Banner screen saver switched off. Users who are signed in during the
+uninstall see the change completely at their next sign-in. `uninstall --keep-user-settings` leaves profiles as they are.
+
+**What uninstall leaves behind, on purpose:** each user's log, `%LOCALAPPDATA%\BetterBanner\BetterBanner.log` (and the
+generated `wallpaper.bmp` next to it if that option was used), so the history is still there for troubleshooting or
+audit; delete the folder if you don't need it. The *Better Banner* event log source also stays registered so earlier
+Application log entries remain readable.
+
 Values can also be given as `--option=value`, e.g. `--logon-text="-- Authorized use only --"`.
 
 > `install`, `config` and `uninstall` need administrator rights and ask for them (UAC) if needed, so *Uninstall* in

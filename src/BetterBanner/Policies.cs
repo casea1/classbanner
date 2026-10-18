@@ -30,6 +30,8 @@ internal static unsafe class Policies
     /// <summary>Title bars, accent and selection highlight in the classification color.</summary>
     private static void ApplyColors(BannerSettings settings)
     {
+        // Keep this user's own values the first time, so uninstall can put them back (issue #19).
+        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.Colors);
         var back = settings.EffectiveBackColor;
         var fore = settings.EffectiveForeColor;
 
@@ -73,6 +75,7 @@ internal static unsafe class Policies
                 break;
         }
 
+        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.Wallpaper);
         using (var desktop = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop"))
         {
             desktop.SetValue("WallpaperStyle", "10"); // Fill
@@ -153,6 +156,7 @@ internal static unsafe class Policies
             return;
         }
 
+        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.ScreenSaver);
         var seconds = settings.ScreenSaverTimeoutSeconds;
         using (var desktop = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop"))
         {
