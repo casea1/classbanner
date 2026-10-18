@@ -26,7 +26,8 @@ public sealed record ParsedCommand(
     bool NoStart = false,
     bool KeepSettings = false,
     string? Error = null,
-    bool Managed = false);
+    bool Managed = false,
+    bool KeepUserSettings = false);
 
 /// <summary>Parses the single-exe command line. Friendly options map onto <see cref="SettingKeys"/> names.</summary>
 public static partial class CommandLine
@@ -46,7 +47,7 @@ public static partial class CommandLine
           BetterBanner.exe config [options]       Change machine settings (run as administrator)
           BetterBanner.exe settings               Open the settings window (also in Control Panel)
           BetterBanner.exe show                   Print the effective settings
-          BetterBanner.exe uninstall [--keep-settings] [--quiet]
+          BetterBanner.exe uninstall [--keep-settings] [--keep-user-settings] [--keep-user-settings] [--quiet]
           BetterBanner.exe version
 
         Options for install and config:
@@ -119,7 +120,7 @@ public static partial class CommandLine
         if (kind is null) return Fail($"Unknown command '{first}'.");
 
         var settings = new List<KeyValuePair<string, string>>();
-        bool quiet = false, noStart = false, keepSettings = false, managed = false;
+        bool quiet = false, noStart = false, keepSettings = false, managed = false, keepUserSettings = false;
 
         for (var i = 1; i < args.Count; i++)
         {
@@ -175,6 +176,7 @@ public static partial class CommandLine
                     case "--no-start": Flag(ref noStart); break;
                     case "--keep-settings": Flag(ref keepSettings); break;
                     case "--managed" when kind == CommandKind.Run: Flag(ref managed); break;
+                    case "--keep-user-settings" when kind == CommandKind.Uninstall: Flag(ref keepUserSettings); break;
                     default: return Fail($"Unknown option '{arg}'.");
                 }
             }
@@ -197,7 +199,7 @@ public static partial class CommandLine
                     : $"Unknown setting '{name}'.");
         }
 
-        return new ParsedCommand(kind.Value, settings, quiet, noStart, keepSettings, Managed: managed);
+        return new ParsedCommand(kind.Value, settings, quiet, noStart, keepSettings, Managed: managed, KeepUserSettings: keepUserSettings);
     }
 
     private static ParsedCommand Fail(string error) => new(CommandKind.Help, [], Error: error);
@@ -205,7 +207,7 @@ public static partial class CommandLine
     private static readonly HashSet<string> Options = new(StringComparer.OrdinalIgnoreCase)
     {
         "--level", "--caption", "--position", "--clock", "--zulu", "--logon-title", "--logon-text", "--set",
-        "--quiet", "-q", "--no-start", "--keep-settings", "--managed",
+        "--quiet", "-q", "--no-start", "--keep-settings", "--managed", "--keep-user-settings",
     };
 
     /// <summary>True for our own options, alone or in "--option=value" form.</summary>

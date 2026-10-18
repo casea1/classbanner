@@ -38,7 +38,18 @@ public static class SettingsLoader
                 values = policy.ReadValues();
                 fromPolicy = values.Count > 0;
                 foreach (var name in SettingKeys.ApplyAll(settings, values))
-                    warnings.Add($"Ignoring invalid policy value '{name}'.");
+                {
+                    if (name.Equals(nameof(BannerSettings.Level), StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Group Policy means to set the level; a broken GPO must not be hidden behind the local level.
+                        settings.Level = null;
+                        warnings.Add($"Group Policy sets an invalid Level '{values[name]}'; the banner shows CLASSIFICATION NOT SET until the policy is fixed.");
+                    }
+                    else
+                    {
+                        warnings.Add($"Ignoring invalid policy value '{name}'.");
+                    }
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             {

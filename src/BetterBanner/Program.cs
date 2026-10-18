@@ -83,9 +83,15 @@ internal static class Program
                 output.Line(AppInfo.Version);
                 return ExitCodes.Ok;
             default:
-                if (cmd.Error is not null) output.Error(cmd.Error + Environment.NewLine);
+                // A mistake gets the error and a pointer to the help, not 25 lines of usage with the error last (#19).
+                if (cmd.Error is not null)
+                {
+                    output.Error(cmd.Error);
+                    output.Line("Run 'BetterBanner.exe help' for usage.");
+                    return ExitCodes.BadArguments;
+                }
                 output.Line(output.IsConsole ? CommandLine.Usage : CommandLine.DialogUsage);
-                return cmd.Error is null ? ExitCodes.Ok : ExitCodes.BadArguments;
+                return ExitCodes.Ok;
         }
     }
 
