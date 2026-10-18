@@ -17,7 +17,8 @@ internal static class Program
             {
                 // Double-clicking the downloaded exe opens setup; the installed copy (started at sign-in) is the banner.
                 CommandKind.Run when args.Length == 0 && !Installer.IsInstalledCopy => SettingsWindow.Run(setup: true),
-                CommandKind.Run => RunBanner(),
+                CommandKind.Run => RunBanner(cmd.Managed),
+                CommandKind.Service => BannerService.Run(),
                 CommandKind.ScreenSaverShow => ScreenSaver.Run(),
                 CommandKind.ScreenSaverPreview => ExitCodes.Ok, // no preview in the Control Panel thumbnail
                 CommandKind.ScreenSaverConfigure => ShowScreenSaverInfo(),
@@ -35,14 +36,15 @@ internal static class Program
         }
     }
 
-    private static int RunBanner()
+    /// <param name="managed">Started by the banner service, which restarts it; the exit code tells the service why it stopped.</param>
+    private static int RunBanner(bool managed)
     {
-        // One banner process per user session. A second launch (Run key + manual start) just exits.
+        // One banner process per user session. A second launch just exits.
         var mutex = CreateMutexW(0, true, SingleInstanceMutex);
         if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS)
         {
             CloseHandle(mutex);
-            return ExitCodes.Ok;
+            return BannerExitCodes.AlreadyRunning;
         }
 
         // Captured now: after an upgrade this path holds the new exe (the old one was renamed while running).
@@ -51,12 +53,16 @@ internal static class Program
         _ = new BannerHost();
         var code = Win32Window.RunMessageLoop();
 
-        if (BannerHost.RestartRequested && exePath is not null)
+        Log.Info($"Better Banner exiting{(BannerHost.UserChoseExit ? " (the user chose Exit)" : "")}.");
+        if (BannerHost.UserChoseExit) return BannerExitCodes.UserExit;
+        if (BannerHost.RestartRequested)
         {
+            // The service starts the new version itself; a banner started some other way restarts on its own.
+            if (managed) return BannerExitCodes.Upgrade;
             CloseHandle(mutex);
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exePath) { UseShellExecute = false });
+            if (exePath is not null)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exePath, "banner") { UseShellExecute = false });
         }
-        Log.Info("Better Banner exiting.");
         return code;
     }
 

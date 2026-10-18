@@ -13,6 +13,9 @@ display scaling. It replaces the USAF *Banner 3.1* (2003); see [docs/banner-3.1-
 - **Stays on the right monitor.** Banners are rebuilt after unlock, resume, monitor changes, DPI changes and Explorer
   restarts, and are checked every 2 seconds. This fixes Banner 3.1's "second monitor's banners jump to the main
   screen after unlock" problem.
+- **Can't simply be closed.** A small Windows service (*Better Banner*, LocalSystem) starts the banner in every
+  signed-in session and starts it again within seconds if it stops. Users can't end it with *End task*, and every
+  unexpected stop is recorded in the Application event log.
 - **Standard markings and colors**, with optional custom text such as `SECRET//NOFORN`.
 - **Sign-in notice.** Optionally shows a message users must acknowledge before they can sign in.
 - **In Control Panel.** *Better Banner* appears in Control Panel (Appearance and Personalization, and System and
@@ -45,7 +48,7 @@ Get-FileHash .\BetterBanner.exe -Algorithm SHA256
 
 - **Start menu > Better Banner** and **Control Panel > Better Banner** open the same window to change settings later.
 - It is listed in **Apps & features** (Programs and Features), where you can uninstall it.
-- The banner starts now and at every sign-in.
+- The *Better Banner* service starts the banner now, for everyone signed in, and at every sign-in.
 
 Running a newer `BetterBanner.exe` the same way offers **Upgrade** and keeps your settings.
 
@@ -84,8 +87,8 @@ Values can also be given as `--option=value`, e.g. `--logon-text="-- Authorized 
 
 ### Domain
 
-1. Deploy `BetterBanner.exe install --quiet --no-start` (plus any options) as a computer startup script, or with
-   SCCM/Intune/PDQ.
+1. Deploy `BetterBanner.exe install --quiet` (plus any options) as a computer startup script, or with
+   SCCM/Intune/PDQ. (`--no-start` registers the service without starting it; it then starts at the next restart.)
 2. Copy `BetterBanner.admx` and `en-US\BetterBanner.adml` (from `BetterBanner-<version>-GroupPolicy.zip`) to your
    Central Store (`\\<domain>\SYSVOL\<domain>\Policies\PolicyDefinitions`).
 3. Set the policies under **Computer Configuration > Administrative Templates > Better Banner**.
@@ -100,7 +103,25 @@ log on**.
 
 Releases are not code-signed yet. Windows SmartScreen may warn the first time (choose *More info > Run anyway*), and
 allow-listing tools (AppLocker, WDAC) need a rule for it. A hash rule using the published SHA-256, or a path rule for
-`%ProgramFiles%\BetterBanner\*`, both work.
+`%ProgramFiles%\BetterBanner\*`, both work. The service and the banner are the same exe, so one rule covers both
+(AppLocker doesn't apply to the service itself, which runs as LocalSystem; the banner runs as the signed-in user).
+
+### Keeping the banner running
+
+Since 1.2.0 the banner is started by the *Better Banner* service (`BetterBanner.exe service`, automatic start,
+LocalSystem) instead of the `Run` key:
+
+- It starts the banner in each signed-in session (console and Remote Desktop) as that user, and starts it again
+  about 2 seconds after it exits for any reason other than those below. If a banner keeps failing, it waits 30 seconds
+  between attempts after the fifth restart in a minute.
+- The banner process is owned by SYSTEM and its user may only query it, so *End task* and `taskkill` fail for the
+  user (and for an administrator who isn't elevated). An elevated administrator can still end it; it's then restarted.
+- Not restarted: *Exit* on the banner menu when `AllowUserExit` is on (until that user's next sign-in), sign-out,
+  `uninstall`, and the brief stop while `install` upgrades it.
+- Standard users can't stop or reconfigure the service; only administrators can (and only they can install).
+- Application event log, source **Better Banner**: 1000 banner started (user, session), 1001 banner stopped
+  unexpectedly and was restarted (user, session, exit code), 1002 user chose Exit, 1003 banner could not be started,
+  1004 service error. The source stays registered after uninstall so earlier entries remain readable.
 
 ## Settings
 
@@ -127,7 +148,7 @@ first `install` and removes the old folder.
 | `FontSize` | `10` | Points, 8-36. Scaled per monitor for display scaling |
 | `HoverTransparency` | `40` | Percent see-through while the mouse is over the banner (0-90) |
 | `StayAboveFullScreenApps` | `true` | Keep the banner over full-screen presentations and video |
-| `AllowUserExit` | `false` | Adds *Exit* to the banner's menu |
+| `AllowUserExit` | `false` | Adds *Exit* to the banner's menu; the banner then stays closed for that user until they sign in again |
 | `ClockEnabled` | `false` | Show a clock on the right |
 | `ClockFormat` | `ddd dd-MMM-yy HH:mm%TZI%` | [.NET date format](https://learn.microsoft.com/dotnet/standard/base-types/custom-date-and-time-format-strings); `%TZI%` becomes `Z` or `L` |
 | `ClockUseZulu` | `false` | Show UTC |
@@ -146,7 +167,8 @@ first `install` and removes the old folder.
 - **Right-click** for *Recover hidden windows*, *Settings...* and *About* (which shows the marking and where
   settings came from).
 - Hover over a banner to see through it.
-- Log: `%LOCALAPPDATA%\BetterBanner\BetterBanner.log`.
+- Log: `%LOCALAPPDATA%\BetterBanner\BetterBanner.log` (the service logs to
+  `C:\Windows\System32\config\systemprofile\AppData\Local\BetterBanner\BetterBanner.log`).
 
 ## Development
 

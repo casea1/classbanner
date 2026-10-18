@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.2.0] - unreleased
 
+### Changed
+- The banner can no longer be ended and stay gone (#17). A new *Better Banner* Windows service (LocalSystem,
+  automatic) replaces the `Run` key: it starts the banner in every signed-in session, starts it again about 2 seconds
+  after any unexpected exit, and protects the process so its user can't end it with *End task*. Each unexpected stop
+  and restart is written to the Application event log (source "Better Banner") with the user and session. *Exit*
+  (when `AllowUserExit` is on), sign-out, uninstall and upgrades don't restart it. `install` stops and replaces every
+  banner, including 1.1.0's, and the service starts the new ones; `--no-start` now means "don't start the service yet".
+
 ### Fixed
 - The banner text can no longer contradict the classification (#18). It must be the level's marking or start with it
   followed by `//` or a space (`SECRET//NOFORN` for SECRET; `TOP SECRET//SCI...` only for TS/SCI). `install`, `config`

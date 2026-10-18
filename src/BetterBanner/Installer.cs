@@ -40,16 +40,16 @@ internal static class Installer
     {
         if (!RequireAdmin(output)) return ExitCodes.NotAdmin;
 
-        var upgradingFromBeta1 = Directory.Exists(LegacyDirectory);
         var settings = PrepareSettings(cmd, output, out var failure);
         if (settings is null) return failure;
 
-        // beta.1 banners can't restart themselves into a new version; stop them once (they start again at sign-in,
-        // and for the current user right after install).
-        if (upgradingFromBeta1) StopRunningBanners();
+        // Stopping the service ends the banners it started; banners started any other way (1.1.0 and earlier used the
+        // Run key) are stopped too. The service starts the new version in every signed-in session afterwards. A banner
+        // that can't be stopped keeps running from its renamed exe and is replaced when the service starts.
+        ServiceControl.Stop(BannerService.Name);
+        using (var run = Registry.LocalMachine.OpenSubKey(RunKey, writable: true)) run?.DeleteValue(AppName, throwOnMissingValue: false);
+        StopRunningBanners(onlyInstalledCopies: true);
 
-        // Banners in other users' sessions keep running: the running exe is renamed (Windows allows that), the new one
-        // is copied in, and each banner restarts itself into the new version when it sees the new install id.
         Directory.CreateDirectory(InstallDir);
         DeleteLeftoverBinaries();
         var self = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the program path.");
@@ -59,8 +59,7 @@ internal static class Installer
 
         SaveSettings(settings, output);
 
-        using (var run = Registry.LocalMachine.CreateSubKey(RunKey))
-            run.SetValue(AppName, $"\"{InstalledExe}\"");
+        RegisterEventSource();
 
         using (var uninstall = Registry.LocalMachine.CreateSubKey(UninstallKey))
         {
@@ -82,7 +81,9 @@ internal static class Installer
         using (var state = Registry.LocalMachine.CreateSubKey(StateKey))
             state.SetValue(InstallIdValue, Guid.NewGuid().ToString());
 
-        if (!cmd.NoStart) StartForCurrentUser();
+        // The service starts the banner in every signed-in session and restarts it if it stops (issue #17).
+        ServiceControl.Install(BannerService.Name, BannerService.DisplayName, BannerService.Description, $"\"{InstalledExe}\" service");
+        if (!cmd.NoStart) ServiceControl.Start(BannerService.Name);
 
         output.Line($"Better Banner {AppInfo.Version} installed to {InstallDir}.");
         output.Line($"Marking: {settings.EffectiveCaption}. It starts automatically at every sign-in.");
@@ -108,7 +109,9 @@ internal static class Installer
     {
         if (!RequireAdmin(output)) return ExitCodes.NotAdmin;
 
-        StopRunningBanners();
+        ServiceControl.Stop(BannerService.Name);
+        ServiceControl.Delete(BannerService.Name);
+        StopRunningBanners(onlyInstalledCopies: false);
         using (var run = Registry.LocalMachine.OpenSubKey(RunKey, writable: true)) run?.DeleteValue(AppName, throwOnMissingValue: false);
         Registry.LocalMachine.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false);
         Registry.LocalMachine.DeleteSubKeyTree(ControlPanelNamespaceKey, throwOnMissingSubKey: false);
@@ -361,8 +364,11 @@ internal static class Installer
         return false;
     }
 
-    /// <summary>Stops banners in every session (uninstall only).</summary>
-    private static void StopRunningBanners()
+    /// <summary>
+    /// Stops banners in every session (and open settings windows). When installing, only copies of the installed exe:
+    /// the setup window that started this install runs from the download folder and must stay open.
+    /// </summary>
+    private static void StopRunningBanners(bool onlyInstalledCopies)
     {
         foreach (var process in Process.GetProcessesByName(AppName))
         {
@@ -371,6 +377,7 @@ internal static class Installer
                 if (process.Id == Environment.ProcessId) continue;
                 try
                 {
+                    if (onlyInstalledCopies && !IsUnder(process, InstallDir)) continue;
                     process.Kill();
                     process.WaitForExit(5000);
                 }
@@ -418,17 +425,23 @@ internal static class Installer
         }
     }
 
-    /// <summary>Starts the banner un-elevated in the current session (Explorer launches it as the signed-in user).</summary>
-    private static void StartForCurrentUser()
+    private static bool IsUnder(Process process, string directory)
     {
-        try
-        {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{InstalledExe}\"") { UseShellExecute = false });
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"Could not start the banner after install: {ex.Message}");
-        }
+        var path = process.MainModule?.FileName ?? "";
+        return path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private const string EventSourceKey = @"SYSTEM\CurrentControlSet\Services\EventLog\Application\" + EventLog.Source;
+
+    /// <summary>
+    /// Registers "Better Banner" in the Application log, using the .NET Framework's generic message file (part of
+    /// Windows) so Event Viewer shows the text. Kept after uninstall so earlier entries stay readable.
+    /// </summary>
+    private static void RegisterEventSource()
+    {
+        using var key = Registry.LocalMachine.CreateSubKey(EventSourceKey);
+        key.SetValue("EventMessageFile", @"%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\EventLogMessages.dll", RegistryValueKind.ExpandString);
+        key.SetValue("TypesSupported", 7, RegistryValueKind.DWord);
     }
 }
 
