@@ -55,14 +55,14 @@ jobs:
         shell: pwsh
         run: ./scripts/smoke-test.ps1 -Exe publish/ClassBanner.exe -Beta1Exe beta1/BetterBanner.exe -PreviousExe v110/BetterBanner.exe -ServiceExe v120/BetterBanner.exe
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
           path: TestResults
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ClassBanner-${{ github.sha }}
           path: |
