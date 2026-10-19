@@ -41,7 +41,9 @@ internal static class Program
     {
         // One banner process per user session. A second launch just exits.
         var mutex = CreateMutexW(0, true, SingleInstanceMutex);
-        if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS)
+        // A banner started by the service owns a mutex this user can't open (its objects are locked down, issue #17),
+        // which reads as "access denied" rather than "already exists": either way, one is running.
+        if (mutex == 0 || System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS)
         {
             CloseHandle(mutex);
             return BannerExitCodes.AlreadyRunning;

@@ -181,6 +181,11 @@ internal sealed unsafe class BannerHost : Win32Window
 
     private void Reconcile()
     {
+        foreach (var banner in _banners)
+        {
+            if (banner.EnsureVisible()) Log.Warn($"A banner ({banner.Slot.DeviceName} {banner.Slot.Edge}) had been hidden or minimized; shown again.");
+        }
+
         var desired = BannerLayout.ComputeSlots(Monitors.GetAll(), Settings.Position, Settings.FontSize, Settings.BannerThickness);
         var existing = _banners.Select(b => new ExistingBanner(b.Id, b.Slot, b.ActualRect)).ToList();
         var plan = BannerLayout.Reconcile(desired, existing);

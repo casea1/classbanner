@@ -61,6 +61,9 @@ function Test-UpgradeFrom([string] $OldExe, [string] $Label) {
     Assert (-not (Test-Path (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Better Banner.lnk'))) "$Label Start menu entry removed"
     Assert (-not (Test-Path $oldDir) -and -not (Test-Path $legacyDir)) "$Label folders removed"
     Assert ($null -ne (Get-Service ClassBanner -ErrorAction SilentlyContinue)) "$Label replaced by the ClassBanner service"
+    # Issue #25: the new banner runs right after the upgrade, while the old banner's colors are still in the profile.
+    Start-Service ClassBanner
+    Start-Sleep -Seconds 6
 
     Invoke-Banner @('uninstall')
     Start-Sleep -Seconds 1
@@ -184,6 +187,59 @@ if (-not $signedIn) {
     Assert ($event -and $event.Message -like "*session $mySession*restarted*") 'unexpected exit and restart in the Application log'
     Write-Host "event: $($event.Message)"
 
+    # Issue #17 re-test: hiding a banner window, suspending its thread or ending its thread must not remove the marking.
+    Add-Type -Namespace CB -Name W -MemberDefinition @'
+[DllImport("user32.dll")] public static extern IntPtr FindWindow(string cls, string title);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+[DllImport("kernel32.dll", SetLastError=true)] public static extern IntPtr OpenThread(int access, bool inherit, int id);
+[DllImport("kernel32.dll")] public static extern int SuspendThread(IntPtr h);
+[DllImport("kernel32.dll")] public static extern bool TerminateThread(IntPtr h, int code);
+'@
+    function Get-MainThread($p) { ($p.Threads | Sort-Object StartTime | Select-Object -First 1).Id }
+
+    $window = [CB.W]::FindWindow('ClassBanner.Banner', $null)
+    [CB.W]::ShowWindow($window, 0) | Out-Null
+    Start-Sleep -Seconds 5
+    Assert ([CB.W]::IsWindowVisible($window)) 'hidden banner window shown again'
+
+    $current = (Get-SessionBanners)[0]
+    $t0 = Get-Date
+    [CB.W]::SuspendThread([CB.W]::OpenThread(0x0002, $false, (Get-MainThread $current))) | Out-Null
+    Start-Sleep -Seconds 4
+    $event = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'ClassBanner'; Id = 1005; StartTime = $t0 } -MaxEvents 1 -ErrorAction SilentlyContinue
+    Assert ($event -and $event.Message -like '*suspended*resumed*') 'suspended banner resumed by the service (event 1005)'
+
+    $t0 = Get-Date
+    [CB.W]::TerminateThread([CB.W]::OpenThread(0x0001, $false, (Get-MainThread $current)), 0) | Out-Null
+    $replaced = Wait-SessionBanner -ExceptId $current.Id
+    Assert ($replaced.Count -eq 1 -and $replaced[0].Id -ne $current.Id) 'banner whose window thread was ended is restarted'
+    $event = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'ClassBanner'; Id = 1005; StartTime = $t0 } -MaxEvents 1 -ErrorAction SilentlyContinue
+    Assert ($event -and $event.Message -like '*showing nothing*') 'ended window thread logged (event 1005)'
+    $restarted = $replaced
+
+    # The banner's own user, not elevated, can't suspend or end its threads or end the process.
+    $probe = Join-Path $env:TEMP 'cb-probe.ps1'
+    $probeOut = Join-Path $env:TEMP 'cb-probe.txt'
+    Set-Content $probe @'
+param($ProcessId, $Out)
+Add-Type -Namespace P -Name K -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr OpenThread(int a, bool i, int id); [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(int a, bool i, int id);'
+$granted = @()
+foreach ($t in (Get-Process -Id $ProcessId).Threads) { if ([P.K]::OpenThread(0x0003, $false, $t.Id) -ne [IntPtr]::Zero) { $granted += "thread $($t.Id)" } }
+if ([P.K]::OpenProcess(0x0001, $false, $ProcessId) -ne [IntPtr]::Zero) { $granted += 'process' }
+"checked; granted: $($granted -join ', ')" | Set-Content $Out
+'@
+    Remove-Item $probeOut -ErrorAction SilentlyContinue
+    & runas.exe /trustlevel:0x20000 "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$probe`" -ProcessId $($restarted[0].Id) -Out `"$probeOut`""
+    for ($i = 0; $i -lt 30 -and -not (Test-Path $probeOut); $i++) { Start-Sleep -Seconds 1 }
+    if (Test-Path $probeOut) {
+        $probeResult = (Get-Content $probeOut -Raw).Trim()
+        Write-Host "probe: $probeResult"
+        Assert ($probeResult -eq 'checked; granted:') 'non-elevated user cannot suspend or end the banner threads or process'
+    } else {
+        Write-Host 'note - runas /trustlevel unavailable on this runner; non-elevated probe skipped'
+    }
+
     $second = Start-Process -FilePath "$installDir\ClassBanner.exe" -ArgumentList 'banner' -PassThru
     Assert ($second.WaitForExit(5000)) 'second instance exits (single instance per session)'
 
@@ -199,9 +255,44 @@ if (-not $signedIn) {
 Get-Content $log -ErrorAction SilentlyContinue | Write-Host
 Assert (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern 'ERROR' -Quiet)) 'no errors logged'
 
+# Issue #24: a profile that is signed out during uninstall must be restored too (its NTUSER.DAT is loaded).
+$otherUser = 'cbsmoke'
+$otherPassword = 'Cb!' + [guid]::NewGuid().ToString('N').Substring(0, 16) + 'x9'
+$otherSid = $null
+try {
+    New-LocalUser -Name $otherUser -Password (ConvertTo-SecureString $otherPassword -AsPlainText -Force) -AccountNeverExpires | Out-Null
+    $credential = New-Object System.Management.Automation.PSCredential(".\$otherUser", (ConvertTo-SecureString $otherPassword -AsPlainText -Force))
+    # What the banner leaves in a profile: the user's original saved, classification colors live.
+    $seed = 'reg add HKCU\Software\Microsoft\Windows\DWM /v ColorPrevalence /t REG_DWORD /d 1 /f & ' +
+            'reg add HKCU\Software\Microsoft\Windows\DWM /v AccentColor /t REG_DWORD /d 0xFF2E10C8 /f & ' +
+            'reg add "HKCU\Software\ClassBanner\Saved\Software/Microsoft/Windows/DWM" /v ColorPrevalence /t REG_DWORD /d 0 /f'
+    Start-Process cmd.exe -ArgumentList "/c $seed" -Credential $credential -LoadUserProfile -Wait -WindowStyle Hidden
+    $otherSid = (Get-LocalUser $otherUser).SID.Value
+    for ($i = 0; $i -lt 60 -and (Test-Path "Registry::HKEY_USERS\$otherSid"); $i++) { Start-Sleep -Seconds 1 }
+    if (Test-Path "Registry::HKEY_USERS\$otherSid") { Write-Host "note - the second profile's hive is still loaded; uninstall restores it in place" }
+    else { Write-Host 'ok - second profile is signed out (hive unloaded), so uninstall must load NTUSER.DAT' }
+} catch {
+    Write-Host "note - could not create a second profile ($($_.Exception.Message)); signed-out restore not tested"
+    $otherSid = $null
+}
+
 Invoke-Banner @('uninstall')
 Start-Sleep -Seconds 1
 Assert (-not (Test-Path $installDir)) 'install folder and settings removed'
+
+if ($otherSid) {
+    $profilePath = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$otherSid").ProfileImagePath
+    $hive = "Registry::HKEY_USERS\$otherSid"
+    $loadedHere = -not (Test-Path $hive)
+    if ($loadedHere) { & reg.exe load 'HKU\cbsmoke' "$profilePath\NTUSER.DAT" | Out-Null; $hive = 'Registry::HKEY_USERS\cbsmoke' }
+    $restored = (Get-ItemProperty "$hive\Software\Microsoft\Windows\DWM").ColorPrevalence
+    $savedLeft = Test-Path "$hive\Software\ClassBanner\Saved"
+    [gc]::Collect()
+    if ($loadedHere) { & reg.exe unload 'HKU\cbsmoke' | Out-Null }
+    Assert ($restored -eq 0 -and -not $savedLeft) 'signed-out profile restored by uninstall'
+    Get-CimInstance Win32_UserProfile | Where-Object { $_.SID -eq $otherSid } | Remove-CimInstance -ErrorAction SilentlyContinue
+    Remove-LocalUser -Name $otherUser -ErrorAction SilentlyContinue
+}
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) 'sign-in notice cleared'
 Assert ($null -eq (Get-Service ClassBanner -ErrorAction SilentlyContinue)) 'service removed'

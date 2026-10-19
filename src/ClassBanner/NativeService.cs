@@ -189,6 +189,20 @@ internal static unsafe partial class Native
         nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags, nint environment,
         string? currentDirectory, ref STARTUPINFOW startupInfo, out PROCESS_INFORMATION processInformation);
 
+    public const uint CREATE_NO_WINDOW = 0x08000000;
+    public const uint CREATE_BREAKAWAY_FROM_JOB = 0x01000000;
+    public const uint MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
+
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool CreateProcessW(string? applicationName, char* commandLine, nint processAttributes,
+        nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags, nint environment,
+        string? currentDirectory, ref STARTUPINFOW startupInfo, out PROCESS_INFORMATION processInformation);
+
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool MoveFileExW(string existing, string? replacement, uint flags);
+
     [LibraryImport("userenv.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CreateEnvironmentBlock(out nint environment, nint token, [MarshalAs(UnmanagedType.Bool)] bool inherit);
@@ -196,6 +210,12 @@ internal static unsafe partial class Native
     [LibraryImport("userenv.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DestroyEnvironmentBlock(nint environment);
+
+    public const int TokenDefaultDacl = 6;
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetTokenInformation(nint token, int infoClass, void* info, uint length);
 
     [LibraryImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

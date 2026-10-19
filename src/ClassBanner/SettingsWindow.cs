@@ -314,7 +314,10 @@ internal sealed class SettingsWindow : Win32Window
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, ToColorRef(preview.EffectiveForeColor));
             var rect = _previewRect;
-            DrawTextW(hdc, preview.EffectiveCaption, -1, ref rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+            // Show what the banner will show: banner text that doesn't fit the level is ignored by it (issue #26).
+            var caption = preview.Level is { } level && ClassificationPresets.CaptionProblem(level, preview.Caption) is not null
+                ? preview.Preset.Caption : preview.EffectiveCaption;
+            DrawTextW(hdc, caption, -1, ref rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
             SelectObject(hdc, old);
             DeleteObject(font);
         }
@@ -466,6 +469,7 @@ internal sealed class SettingsWindow : Win32Window
             ExitCodes.BadArguments => "Not saved: a value was rejected. Check the classification and text size.",
             _ => $"Not saved (error {code}). See {Log.FilePath}.",
         };
+        if (code == 0 && Installer.CaptionDependsOnPolicy() is { } note) message += " " + note;
         SetWindowTextW(_status, message);
         if (code != 0) return;
         _initial = RegistryPolicySource.LoadEffective().Settings;

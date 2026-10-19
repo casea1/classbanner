@@ -47,7 +47,7 @@ public static partial class CommandLine
           ClassBanner.exe config [options]       Change machine settings (run as administrator)
           ClassBanner.exe settings               Open the settings window (also in Control Panel)
           ClassBanner.exe show                   Print the effective settings
-          ClassBanner.exe uninstall [--keep-settings] [--keep-user-settings] [--keep-user-settings] [--quiet]
+          ClassBanner.exe uninstall [--keep-settings] [--keep-user-settings] [--quiet]
           ClassBanner.exe version
 
         Options for install and config:

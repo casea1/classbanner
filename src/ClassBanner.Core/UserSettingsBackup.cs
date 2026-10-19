@@ -58,9 +58,15 @@ public static class UserSettingsBackup
         [(DesktopKey, ["SCRNSAVE.EXE", "ScreenSaveActive", "ScreenSaveTimeOut", "ScreenSaverIsSecure"])];
 
     /// <summary>Saves each value's current state the first time only, so later runs never overwrite the user's original.</summary>
-    public static void Remember(IUserValueStore store, IEnumerable<(string Key, string[] Names)> group)
+    /// <param name="bannerAccentColors">
+    /// Accent values the banner writes. A value that is already the banner's own (left by 1.1.0, or by an earlier
+    /// uninstall) is not the user's original and is saved as the Windows default instead (issue #25).
+    /// </param>
+    public static void Remember(IUserValueStore store, IEnumerable<(string Key, string[] Names)> group, IReadOnlySet<int>? bannerAccentColors = null)
     {
         AdoptOldSaved(store);
+        var colors = bannerAccentColors ?? BannerAccentColors([]);
+        var bannerColored = IsBannerColored(store, colors);
         foreach (var (key, names) in group)
         {
             var saved = SavedFor(key);
@@ -69,7 +75,11 @@ public static class UserSettingsBackup
             foreach (var name in names)
             {
                 if (absent.Contains(name, StringComparer.OrdinalIgnoreCase) || store.TryGet(saved, name, out _)) continue;
-                if (store.TryGet(key, name, out var value) && value is not null) store.Set(saved, name, value);
+                if (store.TryGet(key, name, out var value) && value is not null &&
+                    Original(key, name, value, bannerColored, colors) is { } original)
+                {
+                    store.Set(saved, name, original);
+                }
                 else
                 {
                     absent.Add(name);
@@ -102,32 +112,57 @@ public static class UserSettingsBackup
             }
             store.DeleteTree(SavedKey);
             DeleteProductKeyIfEmpty(store);
+            // 1.2.0 could save the banner's own colors as the "original" (issue #25); never put those back.
+            ResetFingerprints(store, bannerAccentColors);
             return RestoreOutcome.Restored;
         }
 
+        return ResetFingerprints(store, bannerAccentColors) ? RestoreOutcome.ResetLegacy : RestoreOutcome.Untouched;
+    }
+
+    private static bool IsBannerColored(IUserValueStore store, IReadOnlySet<int> colors) =>
+        store.TryGet(DwmKey, "AccentColor", out var accent) && accent is int color && colors.Contains(color) &&
+        store.TryGet(DwmKey, "ColorPrevalence", out var prevalence) && prevalence is 1;
+
+    private static bool IsOurWallpaper(object? value) => value is string path &&
+        (path.EndsWith(@"\ClassBanner\wallpaper.bmp", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(@"\BetterBanner\wallpaper.bmp", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsOurScreenSaver(object? value) => value is string path &&
+        (path.EndsWith(@"\ClassBanner.scr", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(@"\BetterBanner.scr", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The value to save as the user's original, or null to save it as "didn't exist" (the Windows default).</summary>
+    private static object? Original(string key, string name, object value, bool bannerColored, IReadOnlySet<int> colors)
+    {
+        if (key == DwmKey && bannerColored) return name == "ColorPrevalence" ? 0 : null;
+        if (key == AccentKey && name == "AccentColorMenu" && value is int menu && colors.Contains(menu)) return null;
+        if (key == DesktopKey && name == "Wallpaper" && IsOurWallpaper(value)) return "";
+        if (key == DesktopKey && name == "SCRNSAVE.EXE" && IsOurScreenSaver(value)) return null;
+        return value;
+    }
+
+    /// <summary>Switches off whatever of ours is still in the profile. Returns true if anything was.</summary>
+    private static bool ResetFingerprints(IUserValueStore store, IReadOnlySet<int> bannerAccentColors)
+    {
         var reset = false;
-        if (store.TryGet(DwmKey, "AccentColor", out var accent) && accent is int color && bannerAccentColors.Contains(color) &&
-            store.TryGet(DwmKey, "ColorPrevalence", out var prevalence) && prevalence is 1)
+        if (IsBannerColored(store, bannerAccentColors))
         {
             store.Set(DwmKey, "ColorPrevalence", 0);
             reset = true;
         }
-        if (store.TryGet(DesktopKey, "Wallpaper", out var wallpaper) && wallpaper is string path &&
-            (path.EndsWith(@"\ClassBanner\wallpaper.bmp", StringComparison.OrdinalIgnoreCase) ||
-             path.EndsWith(@"\BetterBanner\wallpaper.bmp", StringComparison.OrdinalIgnoreCase)))
+        if (store.TryGet(DesktopKey, "Wallpaper", out var wallpaper) && IsOurWallpaper(wallpaper))
         {
             store.Set(DesktopKey, "Wallpaper", "");
             reset = true;
         }
-        if (store.TryGet(DesktopKey, "SCRNSAVE.EXE", out var scr) && scr is string scrPath &&
-            (scrPath.EndsWith(@"\ClassBanner.scr", StringComparison.OrdinalIgnoreCase) ||
-             scrPath.EndsWith(@"\BetterBanner.scr", StringComparison.OrdinalIgnoreCase)))
+        if (store.TryGet(DesktopKey, "SCRNSAVE.EXE", out var scr) && IsOurScreenSaver(scr))
         {
             store.Delete(DesktopKey, "SCRNSAVE.EXE");
             store.Set(DesktopKey, "ScreenSaveActive", "0");
             reset = true;
         }
-        return reset ? RestoreOutcome.ResetLegacy : RestoreOutcome.Untouched;
+        return reset;
     }
 
     /// <summary>The DWM AccentColor value the banner writes for a banner color (0xFFBBGGRR).</summary>

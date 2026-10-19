@@ -31,7 +31,8 @@ internal static unsafe class Policies
     private static void ApplyColors(BannerSettings settings)
     {
         // Keep this user's own values the first time, so uninstall can put them back (issue #19).
-        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.Colors);
+        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.Colors,
+            UserSettingsBackup.BannerAccentColors([settings.EffectiveBackColor]));
         var back = settings.EffectiveBackColor;
         var fore = settings.EffectiveForeColor;
 
@@ -75,7 +76,8 @@ internal static unsafe class Policies
                 break;
         }
 
-        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.Wallpaper);
+        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.Wallpaper,
+            UserSettingsBackup.BannerAccentColors([settings.EffectiveBackColor]));
         using (var desktop = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop"))
         {
             desktop.SetValue("WallpaperStyle", "10"); // Fill
@@ -156,7 +158,8 @@ internal static unsafe class Policies
             return;
         }
 
-        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.ScreenSaver);
+        UserSettingsBackup.Remember(new RegistryUserStore(Registry.CurrentUser), UserSettingsBackup.ScreenSaver,
+            UserSettingsBackup.BannerAccentColors([settings.EffectiveBackColor]));
         var seconds = settings.ScreenSaverTimeoutSeconds;
         using (var desktop = Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop"))
         {

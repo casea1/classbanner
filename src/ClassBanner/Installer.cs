@@ -148,16 +148,20 @@ internal static class Installer
             var runningFromInstallDir = (Environment.ProcessPath ?? "").StartsWith(InstallDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
             if (runningFromInstallDir)
             {
-                // Can't delete our own exe while running: let a short-lived cmd finish after we exit.
+                // Can't delete our own exe while running. Remove everything else now; leave the rest to a short-lived
+                // cmd started outside the caller's job (a deployment agent or SSH session closing its job would kill
+                // it, issue #26), and to Windows at the next restart if even that is stopped.
+                foreach (var path in Directory.EnumerateFiles(InstallDir))
+                {
+                    if (cmd.KeepSettings && string.Equals(path, SettingsLoader.DefaultSettingsPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    try { File.Delete(path); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { DeleteAtRestart(path); }
+                }
+                if (!cmd.KeepSettings) DeleteAtRestart(InstallDir);
                 var delete = cmd.KeepSettings
                     ? $"del /f /q \"{InstalledExe}\" \"{InstalledScr}\" \"{Path.Combine(InstallDir, "*.old-*")}\""
                     : $"rmdir /s /q \"{InstallDir}\"";
-                Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping 127.0.0.1 -n 3 > nul & {delete}")
-                {
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    WorkingDirectory = Path.GetTempPath(),
-                });
+                StartDetached($"cmd.exe /c ping 127.0.0.1 -n 3 > nul & {delete}");
             }
             else if (cmd.KeepSettings)
             {
@@ -179,8 +183,11 @@ internal static class Installer
         }
         else
         {
+            var failed = userSettings.Failed.Count;
             output.Line($"User colors, wallpaper and screen saver: restored in {userSettings.Restored} profile(s), reset in {userSettings.Reset} " +
-                        "profile(s) changed by an earlier version. Users signed in now see all of it at their next sign-in.");
+                        "profile(s) changed by an earlier version" +
+                        (failed > 0 ? $", NOT restored in {failed} profile(s) (listed below; they keep the classification colors)." : ".") +
+                        " Users signed in now see all of it at their next sign-in.");
             foreach (var failure in userSettings.Failed) output.Line($"Warning: could not restore {failure}");
         }
         return ExitCodes.Ok;
@@ -310,7 +317,29 @@ internal static class Installer
             failure = ExitCodes.BadArguments;
             return null;
         }
+        if (CaptionDependsOnPolicy(settings, policyLevel) is { } note) output.Line($"Warning: {note}");
         return settings;
+    }
+
+    /// <summary>
+    /// Banner text that fits Group Policy's level but not this computer's own level is shown only while the policy
+    /// applies (issue #26). Returns a note saying so, or null.
+    /// </summary>
+    public static string? CaptionDependsOnPolicy()
+    {
+        var policy = new RegistryPolicySource().ReadValues();
+        var policyLevel = policy.TryGetValue(nameof(BannerSettings.Level), out var text) && ClassificationPresets.TryParseLevel(text, out var parsed)
+            ? parsed : (ClassificationLevel?)null;
+        return CaptionDependsOnPolicy(SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath).Settings, policyLevel);
+    }
+
+    private static string? CaptionDependsOnPolicy(BannerSettings local, ClassificationLevel? policyLevel)
+    {
+        if (policyLevel is null || local.Level is not { } own || own == policyLevel) return null;
+        if (ClassificationPresets.CaptionProblem(own, local.Caption) is null) return null;
+        return $"The banner text \"{local.Caption?.Trim()}\" fits Group Policy's level {ClassificationPresets.Get(policyLevel.Value).Caption} " +
+               $"but not this computer's own level {ClassificationPresets.Get(own).Caption}. If the policy is removed, the banner " +
+               $"shows the standard {ClassificationPresets.Get(own).Caption} marking.";
     }
 
     private static void SaveSettings(BannerSettings settings, Output output)
@@ -521,6 +550,33 @@ internal static class Installer
                 // Still in use by a banner that hasn't restarted yet; the next install cleans it up.
             }
         }
+    }
+
+    /// <summary>Marks a file (or empty folder) for deletion at the next restart (MoveFileEx DELAY_UNTIL_REBOOT).</summary>
+    private static void DeleteAtRestart(string path)
+    {
+        if (!MoveFileExW(path, null, MOVEFILE_DELAY_UNTIL_REBOOT))
+            Log.Warn($"Could not schedule {path} for deletion at restart (error {System.Runtime.InteropServices.Marshal.GetLastPInvokeError()}).");
+    }
+
+    /// <summary>Starts a hidden process outside this process's job when the job allows it, otherwise inside it.</summary>
+    private static unsafe void StartDetached(string commandLine)
+    {
+        foreach (var flags in new[] { CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB, CREATE_NO_WINDOW })
+        {
+            var buffer = (commandLine + "\0").ToCharArray();
+            fixed (char* cmd = buffer)
+            {
+                var startup = new STARTUPINFOW { cb = (uint)sizeof(STARTUPINFOW) };
+                if (CreateProcessW(null, cmd, 0, 0, false, flags, 0, Path.GetTempPath(), ref startup, out var info))
+                {
+                    CloseHandle(info.hThread);
+                    CloseHandle(info.hProcess);
+                    return;
+                }
+            }
+        }
+        Log.Warn($"Could not start the clean-up command (error {System.Runtime.InteropServices.Marshal.GetLastPInvokeError()}); files are removed at the next restart.");
     }
 
     private static bool IsUnder(Process process, string directory)

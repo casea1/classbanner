@@ -164,3 +164,93 @@ public class UserSettingsBackupTests
         Assert.Equal(RestoreOutcome.ResetLegacy, UserSettingsBackup.Restore(store, UserSettingsBackup.BannerAccentColors([custom])));
     }
 }
+
+/// <summary>Issue #24: the struct passed to AdjustTokenPrivileges must match the native layout.</summary>
+public class NativeLayoutTests
+{
+    [Fact]
+    public void Token_privileges_matches_the_native_layout()
+    {
+        Assert.Equal(16, System.Runtime.InteropServices.Marshal.SizeOf<TokenPrivilegesOne>());
+        Assert.Equal(4, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TokenPrivilegesOne>(nameof(TokenPrivilegesOne.LuidLowPart)));
+        Assert.Equal(12, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TokenPrivilegesOne>(nameof(TokenPrivilegesOne.Attributes)));
+    }
+
+    [Fact]
+    public void Luid_is_split_into_its_two_halves()
+    {
+        var tp = TokenPrivilegesOne.Enable(0x0000_0001_0000_0011);
+        Assert.Equal(0x11u, tp.LuidLowPart);
+        Assert.Equal(1, tp.LuidHighPart);
+    }
+}
+
+/// <summary>Issue #25: the banner's own colors are never saved, or restored, as the user's originals.</summary>
+public class ContaminatedOriginalsTests
+{
+    private static readonly int Secret = UserSettingsBackup.AccentValue(RgbColor.Parse("#C8102E"));
+    private static readonly HashSet<int> Colors = UserSettingsBackup.BannerAccentColors([]);
+
+    private sealed class Store : IUserValueStore
+    {
+        private readonly Dictionary<string, Dictionary<string, object>> _keys = new(StringComparer.OrdinalIgnoreCase);
+        public bool TryGet(string key, string name, out object? value) { value = null; return _keys.TryGetValue(key, out var v) && v.TryGetValue(name, out value); }
+        public void Set(string key, string name, object value) { if (!_keys.TryGetValue(key, out var v)) _keys[key] = v = new(StringComparer.OrdinalIgnoreCase); v[name] = value; }
+        public void Delete(string key, string name) { if (_keys.TryGetValue(key, out var v)) v.Remove(name); }
+        public IEnumerable<string> ValueNames(string key) => _keys.TryGetValue(key, out var v) ? v.Keys.ToList() : [];
+        public IEnumerable<string> SubKeys(string key) => _keys.Keys.Where(k => k.StartsWith(key + "\\", StringComparison.OrdinalIgnoreCase)).Select(k => k[(key.Length + 1)..].Split('\\')[0]).Distinct().ToList();
+        public bool KeyExists(string key) => _keys.Keys.Any(k => k.Equals(key, StringComparison.OrdinalIgnoreCase) || k.StartsWith(key + "\\", StringComparison.OrdinalIgnoreCase));
+        public void DeleteTree(string key) { foreach (var k in _keys.Keys.Where(k => k.Equals(key, StringComparison.OrdinalIgnoreCase) || k.StartsWith(key + "\\", StringComparison.OrdinalIgnoreCase)).ToList()) _keys.Remove(k); }
+        public object? Get(string key, string name) => TryGet(key, name, out var v) ? v : null;
+    }
+
+    [Fact]
+    public void Upgrade_from_1_1_0_then_uninstall_turns_the_classification_accent_off()
+    {
+        var store = new Store();
+        // 1.1.0's banner colored the title bars and saved nothing.
+        store.Set(UserSettingsBackup.DwmKey, "ColorPrevalence", 1);
+        store.Set(UserSettingsBackup.DwmKey, "AccentColor", Secret);
+        store.Set(UserSettingsBackup.AccentKey, "AccentColorMenu", Secret);
+        store.Set(UserSettingsBackup.DesktopKey, "Wallpaper", @"C:\Users\jo\AppData\Local\BetterBanner\wallpaper.bmp");
+
+        // The new banner runs right after the upgrade.
+        UserSettingsBackup.Remember(store, UserSettingsBackup.Colors, Colors);
+        UserSettingsBackup.Remember(store, UserSettingsBackup.Wallpaper, Colors);
+
+        UserSettingsBackup.Restore(store, Colors);
+        Assert.Equal(0, store.Get(UserSettingsBackup.DwmKey, "ColorPrevalence"));
+        Assert.Null(store.Get(UserSettingsBackup.DwmKey, "AccentColor"));
+        Assert.Null(store.Get(UserSettingsBackup.AccentKey, "AccentColorMenu"));
+        Assert.Equal("", store.Get(UserSettingsBackup.DesktopKey, "Wallpaper"));
+    }
+
+    [Fact]
+    public void Contaminated_save_from_1_2_0_is_not_restored()
+    {
+        var store = new Store();
+        // 1.2.0 saved the banner's red as the "original".
+        var saved = UserSettingsBackup.OldSavedKey + "\\" + UserSettingsBackup.DwmKey.Replace('\\', '/');
+        store.Set(saved, "ColorPrevalence", 1);
+        store.Set(saved, "AccentColor", Secret);
+        store.Set(UserSettingsBackup.DwmKey, "ColorPrevalence", 1);
+        store.Set(UserSettingsBackup.DwmKey, "AccentColor", Secret);
+
+        Assert.Equal(RestoreOutcome.Restored, UserSettingsBackup.Restore(store, Colors));
+        Assert.Equal(0, store.Get(UserSettingsBackup.DwmKey, "ColorPrevalence"));
+    }
+
+    [Fact]
+    public void A_users_own_accent_is_still_saved_and_restored()
+    {
+        var store = new Store();
+        store.Set(UserSettingsBackup.DwmKey, "ColorPrevalence", 1);
+        store.Set(UserSettingsBackup.DwmKey, "AccentColor", 42);
+        UserSettingsBackup.Remember(store, UserSettingsBackup.Colors, Colors);
+        store.Set(UserSettingsBackup.DwmKey, "AccentColor", Secret);
+
+        UserSettingsBackup.Restore(store, Colors);
+        Assert.Equal(1, store.Get(UserSettingsBackup.DwmKey, "ColorPrevalence"));
+        Assert.Equal(42, store.Get(UserSettingsBackup.DwmKey, "AccentColor"));
+    }
+}

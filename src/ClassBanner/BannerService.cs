@@ -117,12 +117,15 @@ internal static unsafe class BannerService
     private sealed class Slot
     {
         public nint Process;
+        /// <summary>The banner's first thread, which runs its windows: watched so a frozen or ended UI is noticed.</summary>
+        public nint Thread;
         public uint ProcessId;
         public string User = "";
         public bool UserExited;
         public bool LaunchFailing;
         public DateTime NextStart;
         public RestartDecision? Pending;
+        public string? HealthProblem;
         public readonly RestartThrottle Throttle = new();
     }
 
@@ -152,6 +155,7 @@ internal static unsafe class BannerService
                 if (slot.Process == 0) continue;
                 if (!_shutdown) TerminateProcess(slot.Process, 0);
                 CloseHandle(slot.Process);
+                if (slot.Thread != 0) CloseHandle(slot.Thread);
             }
             _slots.Clear();
         }
@@ -173,9 +177,21 @@ internal static unsafe class BannerService
                 if (_slots.TryGetValue(session, out var slot)) slot.UserExited = false;
             }
 
+            // An administrator turning AllowUserExit off brings back the banners users had closed (issue #26).
+            if (_slots.Values.Any(s => s.UserExited) && !AllowUserExit())
+            {
+                foreach (var (session, slot) in _slots.Where(s => s.Value.UserExited))
+                {
+                    slot.UserExited = false;
+                    slot.NextStart = now;
+                    Log.Info($"AllowUserExit is off now; starting the banner again for {slot.User} in session {session}.");
+                }
+            }
+
             foreach (var session in _slots.Keys.Where(s => !signedIn.Contains(s)).ToList())
             {
                 if (_slots[session].Process != 0) CloseHandle(_slots[session].Process);
+                if (_slots[session].Thread != 0) CloseHandle(_slots[session].Thread);
                 _slots.Remove(session);
             }
 
@@ -183,6 +199,7 @@ internal static unsafe class BannerService
             {
                 if (!_slots.TryGetValue(session, out var slot)) _slots[session] = slot = new Slot { NextStart = now };
 
+                if (slot.Process != 0 && WaitForSingleObject(slot.Process, 0) != WAIT_OBJECT_0) CheckHealth(session, slot);
                 if (slot.Process != 0 && WaitForSingleObject(slot.Process, 0) == WAIT_OBJECT_0)
                     OnExited(session, slot, now);
 
@@ -191,13 +208,44 @@ internal static unsafe class BannerService
             }
         }
 
+        /// <summary>
+        /// A banner whose process is alive is not necessarily showing (issue #17): its window thread may have been
+        /// suspended or ended. A suspended thread is resumed; if it has ended, the process is ended and restarted.
+        /// </summary>
+        private static void CheckHealth(uint session, Slot slot)
+        {
+            if (slot.Thread == 0) return;
+            if (WaitForSingleObject(slot.Thread, 0) == WAIT_OBJECT_0)
+            {
+                TerminateProcess(slot.Process, BannerHealthExitCode);
+                WaitForSingleObject(slot.Process, 2000);
+                slot.HealthProblem = "its window thread had ended";
+                EventLog.Write(EVENTLOG_WARNING_TYPE, EventLog.NotResponding,
+                    $"The banner for {slot.User} in session {session} (process {slot.ProcessId}) was running but showing nothing: its window thread had ended. It was ended and restarted.");
+                return;
+            }
+
+            var count = ResumeThread(slot.Thread);
+            if (count is 0 or uint.MaxValue) return;
+            while (count > 1 && count != uint.MaxValue) count = ResumeThread(slot.Thread);
+            EventLog.Write(EVENTLOG_WARNING_TYPE, EventLog.NotResponding,
+                $"The banner for {slot.User} in session {session} (process {slot.ProcessId}) had been suspended (frozen). It was resumed.");
+        }
+
         private static void OnExited(uint session, Slot slot, DateTime now)
         {
             GetExitCodeProcess(slot.Process, out var exitCode);
             CloseHandle(slot.Process);
             slot.Process = 0;
+            if (slot.Thread != 0) CloseHandle(slot.Thread);
+            slot.Thread = 0;
 
             var decision = RestartPolicy.Decide((int)exitCode, userSignedIn: true, _stopping, AllowUserExit());
+            if (slot.HealthProblem is { } problem)
+            {
+                decision = new RestartDecision(RestartAction.Restart, false, problem); // already logged as event 1005
+                slot.HealthProblem = null;
+            }
             switch (decision.Action)
             {
                 case RestartAction.StayStopped:
@@ -218,7 +266,7 @@ internal static unsafe class BannerService
 
         private static void Start(uint session, Slot slot, DateTime now)
         {
-            if (!TryLaunch(session, out var process, out var processId, out var user, out var error))
+            if (!TryLaunch(session, out var process, out var thread, out var processId, out var user, out var error))
             {
                 if (!slot.LaunchFailing)
                 {
@@ -231,6 +279,7 @@ internal static unsafe class BannerService
 
             slot.LaunchFailing = false;
             slot.Process = process;
+            slot.Thread = thread;
             slot.ProcessId = processId;
             slot.User = user;
             var pending = slot.Pending;
@@ -289,9 +338,10 @@ internal static unsafe class BannerService
     }
 
     /// <summary>Starts "ClassBanner.exe banner --managed" as the session's user, on their desktop.</summary>
-    private static bool TryLaunch(uint session, out nint process, out uint processId, out string user, out string error)
+    private static bool TryLaunch(uint session, out nint process, out nint thread, out uint processId, out string user, out string error)
     {
         process = 0;
+        thread = 0;
         processId = 0;
         user = $"session {session}";
         error = "";
@@ -309,6 +359,9 @@ internal static unsafe class BannerService
                 sid = identity.User?.Value ?? throw new InvalidOperationException("The session's token has no user.");
             }
 
+            // Every object the banner creates (each thread the runtime starts, too) gets this DACL, so its user can't
+            // suspend or end its threads (issue #17). Owner Rights limits what the user gets as their owner.
+            SetDefaultDacl(primary, sid);
             if (!CreateEnvironmentBlock(out environment, primary, false)) environment = 0;
 
             var commandLine = $"\"{exe}\" banner --managed\0".ToCharArray();
@@ -321,8 +374,9 @@ internal static unsafe class BannerService
                     return Fail(out error, "CreateProcessAsUser");
 
                 Harden(info.hProcess, sid);
+                HardenThread(info.hThread, sid);
                 ResumeThread(info.hThread);
-                CloseHandle(info.hThread);
+                thread = info.hThread;
                 process = info.hProcess;
                 processId = info.dwProcessId;
             }
@@ -344,6 +398,39 @@ internal static unsafe class BannerService
         {
             error = $"{what} failed (error {Marshal.GetLastPInvokeError()})";
             return false;
+        }
+    }
+
+    /// <summary>Exit code the service gives a banner it ends because it had stopped showing.</summary>
+    private const uint BannerHealthExitCode = 0xBB0017;
+
+    /// <summary>The user's rights on the banner's objects: read and wait only (no suspend, terminate or write-DACL).</summary>
+    private static string UserLimitedSddl(string userSid) =>
+        $"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGX;;;{userSid})(A;;RC;;;OW)";
+
+    private static void SetDefaultDacl(nint token, string userSid)
+    {
+        var acl = new RawSecurityDescriptor(UserLimitedSddl(userSid)).DiscretionaryAcl
+            ?? throw new InvalidOperationException("No DACL.");
+        var bytes = new byte[acl.BinaryLength];
+        acl.GetBinaryForm(bytes, 0);
+        fixed (byte* pAcl = bytes)
+        {
+            var info = (nint)pAcl; // TOKEN_DEFAULT_DACL { PACL DefaultDacl; }
+            if (!SetTokenInformation(token, TokenDefaultDacl, &info, (uint)sizeof(nint)))
+                Log.Warn($"Could not set the banner's default DACL (error {Marshal.GetLastPInvokeError()}).");
+        }
+    }
+
+    private static void HardenThread(nint thread, string userSid)
+    {
+        var descriptor = new RawSecurityDescriptor($"O:SYG:SY{UserLimitedSddl(userSid)}");
+        var bytes = new byte[descriptor.BinaryLength];
+        descriptor.GetBinaryForm(bytes, 0);
+        fixed (byte* sd = bytes)
+        {
+            if (!SetKernelObjectSecurity(thread, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, sd))
+                Log.Warn($"Could not protect the banner's thread (error {Marshal.GetLastPInvokeError()}).");
         }
     }
 
@@ -375,6 +462,7 @@ internal static unsafe class EventLog
     public const uint UserExit = 1002;
     public const uint StartFailed = 1003;
     public const uint ServiceError = 1004;
+    public const uint NotResponding = 1005;
 
     public static void Write(ushort type, uint id, string message)
     {

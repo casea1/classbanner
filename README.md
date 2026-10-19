@@ -126,14 +126,19 @@ LocalSystem) instead of the `Run` key:
 - It starts the banner in each signed-in session (console and Remote Desktop) as that user, and starts it again
   about 2 seconds after it exits for any reason other than those below. If a banner keeps failing, it waits 30 seconds
   between attempts after the fifth restart in a minute.
-- The banner process is owned by SYSTEM and its user may only query it, so *End task* and `taskkill` fail for the
-  user (and for an administrator who isn't elevated). An elevated administrator can still end it; it's then restarted.
-- Not restarted: *Exit* on the banner menu when `AllowUserExit` is on (until that user's next sign-in), sign-out,
-  `uninstall`, and the brief stop while `install` upgrades it.
+- The banner process, its threads and everything else it creates are owned by SYSTEM (or limited by an Owner Rights
+  entry), and its user may only query them. So *End task*, `taskkill` and suspending or ending its threads fail for
+  the user (and for an administrator who isn't elevated). An elevated administrator can still end it; it's then
+  restarted.
+- Its health is watched too, not only whether it runs: a banner window that is hidden or minimized is shown again
+  within 2 seconds; if the banner's window thread is suspended the service resumes it, and if that thread has ended
+  the service ends the process and starts a new banner.
+- Not restarted: *Exit* on the banner menu when `AllowUserExit` is on (until that user's next sign-in, or until an
+  administrator turns `AllowUserExit` off), sign-out, `uninstall`, and the brief stop while `install` upgrades it.
 - Standard users can't stop or reconfigure the service; only administrators can (and only they can install).
 - Application event log, source **ClassBanner**: 1000 banner started (user, session), 1001 banner stopped
   unexpectedly and was restarted (user, session, exit code), 1002 user chose Exit, 1003 banner could not be started,
-  1004 service error. The source stays registered after uninstall so earlier entries remain readable.
+  1004 service error, 1005 banner frozen or showing nothing (resumed, or ended and restarted). The source stays registered after uninstall so earlier entries remain readable.
 
 ## Settings
 

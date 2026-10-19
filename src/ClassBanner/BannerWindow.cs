@@ -71,6 +71,18 @@ internal sealed unsafe class BannerWindow : Win32Window
             SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
+    /// <summary>
+    /// Shows the banner again if something hid or minimized it (another process can call ShowWindow on it, issue #17).
+    /// Returns true when it had to.
+    /// </summary>
+    public bool EnsureVisible()
+    {
+        if (IsWindowVisible(Handle) && !IsIconic(Handle)) return false;
+        ShowWindow(Handle, SW_SHOWNOACTIVATE);
+        Position();
+        return true;
+    }
+
     public void KeepOnTop()
     {
         if (_settings.StayAboveFullScreenApps)

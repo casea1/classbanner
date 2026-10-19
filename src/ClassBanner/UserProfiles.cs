@@ -120,15 +120,6 @@ internal static unsafe partial class UserProfiles
     private static readonly nint HKEY_USERS = unchecked((nint)(int)0x80000003);
     private const uint TOKEN_ADJUST_PRIVILEGES = 0x20;
     private const uint TOKEN_QUERY = 0x8;
-    private const uint SE_PRIVILEGE_ENABLED = 0x2;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct TOKEN_PRIVILEGES
-    {
-        public uint PrivilegeCount;
-        public long Luid;
-        public uint Attributes;
-    }
 
     private static bool EnablePrivileges()
     {
@@ -139,7 +130,7 @@ internal static unsafe partial class UserProfiles
             foreach (var name in new[] { "SeBackupPrivilege", "SeRestorePrivilege" })
             {
                 if (!LookupPrivilegeValueW(null, name, out var luid)) { ok = false; continue; }
-                var tp = new TOKEN_PRIVILEGES { PrivilegeCount = 1, Luid = luid, Attributes = SE_PRIVILEGE_ENABLED };
+                var tp = TokenPrivilegesOne.Enable(luid);
                 if (!AdjustTokenPrivileges(token, false, &tp, 0, 0, 0) || Marshal.GetLastPInvokeError() != 0) ok = false;
             }
             return ok;
@@ -164,7 +155,7 @@ internal static unsafe partial class UserProfiles
     [LibraryImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AdjustTokenPrivileges(nint token, [MarshalAs(UnmanagedType.Bool)] bool disableAll,
-        TOKEN_PRIVILEGES* newState, uint length, nint previous, nint returnLength);
+        TokenPrivilegesOne* newState, uint length, nint previous, nint returnLength);
 
     [LibraryImport("advapi32.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int RegLoadKeyW(nint key, string subKey, string file);
