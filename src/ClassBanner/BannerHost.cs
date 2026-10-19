@@ -62,7 +62,25 @@ internal sealed unsafe class BannerHost : Win32Window
 
         SetTimer(Handle, TimerReconcile, ReconcileIntervalMs, 0);
         SetTimer(Handle, TimerSettings, SettingsIntervalMs, 0);
+
+        // Re-judge which banners a full-screen app should cover the moment the active window changes or a window is
+        // restored, instead of on the next 2-second check.
+        _current = this;
+        _focusHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, 0, &OnWindowEvent, 0, 0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        _restoreHook = SetWinEventHook(EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZEEND, 0, &OnWindowEvent, 0, 0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
         ApplySettings(firstRun: true);
+    }
+
+    private static BannerHost? _current;
+    private readonly nint _focusHook, _restoreHook;
+
+    [UnmanagedCallersOnly]
+    private static void OnWindowEvent(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (_current is not { } host) return;
+        foreach (var banner in host._banners) banner.KeepOnTop();
     }
 
     public BannerSettings Settings => _loaded.Settings;
@@ -145,6 +163,9 @@ internal sealed unsafe class BannerHost : Win32Window
                 return 1;
 
             case WM_DESTROY:
+                if (_focusHook != 0) UnhookWinEvent(_focusHook);
+                if (_restoreHook != 0) UnhookWinEvent(_restoreHook);
+                _current = null;
                 WTSUnRegisterSessionNotification(Handle);
                 DestroyBanners();
                 PostQuitMessage(0);

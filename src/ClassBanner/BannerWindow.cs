@@ -88,18 +88,33 @@ internal sealed unsafe class BannerWindow : Win32Window
 
     /// <summary>
     /// Topmost, unless <see cref="BannerSettings.StayAboveFullScreenApps"/> is off and a full-screen app (full-screen
-    /// Remote Desktop, a presentation, video) is in front on this monitor: then just behind it, so a remote session
-    /// shows its own banner instead of having this one drawn over its top and bottom edges.
+    /// Remote Desktop, a presentation, video) is frontmost on this monitor: then just behind it, so a remote session
+    /// shows its own banner instead of having this one drawn over its edges. Judged per monitor by what is on top
+    /// there, not by which window is active, so clicking something on another monitor doesn't bring it back.
     /// </summary>
     private nint ZOrderTarget()
     {
         if (_settings.StayAboveFullScreenApps) return HWND_TOPMOST;
-        var front = GetForegroundWindow();
-        if (front == 0 || front == Handle) return HWND_TOPMOST;
-        GetWindowThreadProcessId(front, out var pid);
-        if (pid == (uint)Environment.ProcessId) return HWND_TOPMOST;
-        if (!GetWindowRect(front, out var rect)) return HWND_TOPMOST;
-        return FullScreen.Covers(rect.ToScreenRect(), Slot.MonitorBounds, GetClassName(front)) ? front : HWND_TOPMOST;
+        return FullScreen.FrontmostOn(Slot.MonitorBounds, WindowsFrontToBack()) ?? HWND_TOPMOST;
+    }
+
+    /// <summary>Visible top-level windows of other processes, front to back.</summary>
+    private static List<TopWindow> WindowsFrontToBack()
+    {
+        var windows = new List<TopWindow>();
+        var ownPid = (uint)Environment.ProcessId;
+        for (var hwnd = GetTopWindow(0); hwnd != 0; hwnd = GetWindow(hwnd, GW_HWNDNEXT))
+        {
+            if (!IsWindowVisible(hwnd) || IsIconic(hwnd) || IsCloaked(hwnd)) continue;
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == ownPid) continue;
+            // Tool windows and no-activate pop-ups (tooltips, notifications, overlays) aren't what the user is looking at.
+            var exStyle = (uint)(long)GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            if ((exStyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) != 0) continue;
+            if (!GetWindowRect(hwnd, out var rect)) continue;
+            windows.Add(new TopWindow(hwnd, rect.ToScreenRect(), GetClassName(hwnd), pid));
+        }
+        return windows;
     }
 
     public void Redraw() => InvalidateRect(Handle, 0, false);

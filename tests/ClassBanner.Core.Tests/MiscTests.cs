@@ -393,6 +393,43 @@ public class FullScreenTests
     public void Desktop_is_not_a_full_screen_app(string className) =>
         Assert.False(FullScreen.Covers(new ScreenRect(0, 0, 3840, 1080), Monitor, className));
 
+    private static TopWindow Win(nint h, ScreenRect r, uint pid, string cls = "App") => new(h, r, cls, pid);
+    private static readonly ScreenRect Left = new(0, 0, 1920, 1080);
+
+    [Fact]
+    public void Full_screen_session_stays_in_front_when_a_window_on_the_other_monitor_is_clicked()
+    {
+        // Notepad on the left monitor is now active and frontmost, RDP is full screen on the right one.
+        var windows = new[] { Win(1, new ScreenRect(100, 100, 900, 700), 10), Win(2, Monitor, 20, "TscShellContainerClass") };
+        Assert.Equal((nint)2, FullScreen.FrontmostOn(Monitor, windows));
+        Assert.Null(FullScreen.FrontmostOn(Left, windows));
+    }
+
+    [Fact]
+    public void Connection_bar_of_the_same_app_does_not_count()
+    {
+        var windows = new[] { Win(3, new ScreenRect(2600, 0, 3100, 30), 20, "BBarWindowClass"), Win(2, Monitor, 20, "TscShellContainerClass") };
+        Assert.Equal((nint)2, FullScreen.FrontmostOn(Monitor, windows));
+    }
+
+    [Fact]
+    public void Another_apps_window_in_front_brings_the_banner_back()
+    {
+        var windows = new[] { Win(1, new ScreenRect(2000, 100, 2900, 700), 10), Win(2, Monitor, 20, "TscShellContainerClass") };
+        Assert.Null(FullScreen.FrontmostOn(Monitor, windows));
+    }
+
+    [Fact]
+    public void Taskbar_in_front_is_ignored()
+    {
+        var windows = new[] { Win(9, new ScreenRect(1920, 1040, 3840, 1080), 5, "Shell_SecondaryTrayWnd"), Win(2, Monitor, 20) };
+        Assert.Equal((nint)2, FullScreen.FrontmostOn(Monitor, windows));
+    }
+
+    [Fact]
+    public void No_full_screen_window_means_topmost() =>
+        Assert.Null(FullScreen.FrontmostOn(Monitor, [Win(1, new ScreenRect(2000, 15, 3840, 1020), 10)]));
+
     [Fact]
     public void Off_by_default() => Assert.False(new BannerSettings().StayAboveFullScreenApps);
 }
