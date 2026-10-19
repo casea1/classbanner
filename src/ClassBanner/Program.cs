@@ -2,6 +2,10 @@ using System.Text;
 using ClassBanner.Core;
 using static ClassBanner.Native;
 
+// Load the DLLs we call (wtsapi32, userenv, dwmapi, ...) from System32 only, never from the folder the exe was started
+// from: setup runs elevated from the download folder, where a planted DLL would otherwise be loaded.
+[assembly: System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
+
 namespace ClassBanner;
 
 internal static class Program
@@ -43,7 +47,9 @@ internal static class Program
         var mutex = CreateMutexW(0, true, SingleInstanceMutex);
         // A banner started by the service owns a mutex this user can't open (its objects are locked down, issue #17),
         // which reads as "access denied" rather than "already exists": either way, one is running.
-        if (mutex == 0 || System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS)
+        // A banner started by the service never gives way: the mutex name is in the user's own namespace, so the user
+        // could create it first and keep the marking off the screen. The service already keeps it to one per session.
+        if (!managed && (mutex == 0 || System.Runtime.InteropServices.Marshal.GetLastPInvokeError() == ERROR_ALREADY_EXISTS))
         {
             CloseHandle(mutex);
             return BannerExitCodes.AlreadyRunning;

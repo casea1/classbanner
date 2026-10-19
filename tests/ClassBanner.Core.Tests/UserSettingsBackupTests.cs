@@ -226,6 +226,21 @@ public class ContaminatedOriginalsTests
     }
 
     [Fact]
+    public void Uninstall_writes_back_only_the_values_the_banner_saves()
+    {
+        var store = new Store();
+        // A user edits their own saved copy to plant something for the elevated uninstall to write.
+        store.Set(UserSettingsBackup.SavedKey + "\\Software/Microsoft/Windows/CurrentVersion/Run", "evil", @"C:\evil.exe");
+        store.Set(UserSettingsBackup.SavedKey + "\\" + UserSettingsBackup.DwmKey.Replace('\\', '/'), "Evil", 1);
+        store.Set(UserSettingsBackup.SavedKey + "\\" + UserSettingsBackup.DwmKey.Replace('\\', '/'), "ColorPrevalence", 0);
+
+        UserSettingsBackup.Restore(store, Colors);
+        Assert.Null(store.Get(@"Software\Microsoft\Windows\CurrentVersion\Run", "evil"));
+        Assert.Null(store.Get(UserSettingsBackup.DwmKey, "Evil"));
+        Assert.Equal(0, store.Get(UserSettingsBackup.DwmKey, "ColorPrevalence"));
+    }
+
+    [Fact]
     public void Contaminated_save_from_1_2_0_is_not_restored()
     {
         var store = new Store();

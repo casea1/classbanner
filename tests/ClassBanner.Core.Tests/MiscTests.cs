@@ -292,14 +292,14 @@ public class CaptionLayoutTests
     [Fact]
     public void Centered_when_the_clock_fits_beside_it()
     {
-        var p = CaptionLayout.Place(1920, 200, 250, 8);
-        Assert.Equal(new CaptionPlacement(0, 1920, true, 1), p);
+        var p = CaptionLayout.Place(1920, 200, 0, 250, 8);
+        Assert.Equal(new CaptionPlacement(0, 1920, false, true, 1), p);
     }
 
     [Fact]
     public void Moved_left_when_centering_would_hit_the_clock()
     {
-        var p = CaptionLayout.Place(1024, 600, 300, 8);
+        var p = CaptionLayout.Place(1024, 600, 0, 300, 8);
         Assert.True(p.ShowClock);
         Assert.Equal(1, p.Scale);
         Assert.Equal(8, p.Left);
@@ -310,16 +310,58 @@ public class CaptionLayoutTests
     [Fact]
     public void Clock_is_hidden_before_the_marking_is_shortened()
     {
-        var p = CaptionLayout.Place(1024, 800, 300, 8);
+        var p = CaptionLayout.Place(1024, 800, 0, 300, 8);
         Assert.False(p.ShowClock);
         Assert.Equal(1, p.Scale);
-        Assert.Equal(new CaptionPlacement(0, 1024, false, 1), p);
+        Assert.Equal(new CaptionPlacement(0, 1024, false, false, 1), p);
+    }
+
+    [Fact]
+    public void User_name_and_clock_both_shown_when_they_fit()
+    {
+        var p = CaptionLayout.Place(1920, 200, 150, 250, 8);
+        Assert.Equal(new CaptionPlacement(0, 1920, true, true, 1), p);
+    }
+
+    [Fact]
+    public void Marking_moves_right_of_a_long_user_name()
+    {
+        var p = CaptionLayout.Place(1024, 400, 350, 0, 8);
+        Assert.True(p.ShowUser);
+        Assert.Equal(8 + 350 + 8, p.Left);
+        Assert.True(p.Right - p.Left >= 400);
+    }
+
+    [Fact]
+    public void Clock_gives_way_before_the_user_name()
+    {
+        var p = CaptionLayout.Place(1024, 500, 200, 300, 8);
+        Assert.True(p.ShowUser);
+        Assert.False(p.ShowClock);
+        Assert.Equal(1, p.Scale);
+        Assert.Equal(new CaptionPlacement(0, 1024, true, false, 1), p); // still centered, clear of the name
+    }
+
+    [Fact]
+    public void Both_side_items_hidden_before_the_marking_is_shortened()
+    {
+        var p = CaptionLayout.Place(1024, 900, 200, 300, 8);
+        Assert.Equal(new CaptionPlacement(0, 1024, false, false, 1), p);
+    }
+
+    [Fact]
+    public void Show_user_name_setting_round_trips()
+    {
+        var s = new BannerSettings();
+        Assert.False(s.ShowUserName);
+        Assert.True(SettingKeys.TryApply(s, "ShowUserName", "1"));
+        Assert.True(s.ShowUserName);
     }
 
     [Fact]
     public void Marking_wider_than_the_screen_is_shrunk_not_truncated()
     {
-        var p = CaptionLayout.Place(800, 1600, 0, 8);
+        var p = CaptionLayout.Place(800, 1600, 0, 0, 8);
         Assert.False(p.ShowClock);
         Assert.InRange(p.Scale, 0.48, 0.5);
     }

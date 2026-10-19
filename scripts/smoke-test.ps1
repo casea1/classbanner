@@ -88,7 +88,8 @@ Stop-Process -Id $setup.Id
 Invoke-Banner @('install', '--no-start') -ExpectedExitCode 2
 Assert (-not (Test-Path "$installDir\ClassBanner.exe")) 'install without --level is refused'
 Invoke-Banner @('install', '--level', 'SECRET', '--caption', 'SECRET//NOFORN', '--logon-title', 'Notice',
-                '--logon-text', 'Authorized use only', '--set', 'ClockEnabled=1', '--no-start')
+                '--logon-text', 'Authorized use only', '--set', 'ClockEnabled=1',
+                '--set', 'ShowUserName=1', '--no-start')
 
 Assert (Test-Path "$installDir\ClassBanner.exe") 'exe installed'
 Assert (Test-Path "$installDir\ClassBanner.scr") 'screen saver installed'

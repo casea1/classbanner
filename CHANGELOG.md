@@ -5,6 +5,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-19
+
+### Added
+- **Show user name** (`ShowUserName`, off by default): the signed-in user's account name on the left of every
+  banner. Set it in Group Policy (*Appearance > Show user name*, new in the 1.4 templates), the settings window or
+  `config --set ShowUserName=1`. On a narrow screen the clock is hidden first, then the user name, before the marking
+  is ever shortened.
+
+### Fixed
+- Banners no longer disappear and reappear once or twice after unlocking or waking the PC. They were rebuilt after
+  every unlock, and again for each display change while the monitors came back. Now the banner waits until the displays
+  are quiet, then checks once: a banner that moved is put back, and all of them are rebuilt only if the monitor layout
+  really changed.
+
+### Security
+- `install`/`uninstall` start `cmd.exe` and `powershell.exe` by full path, and the program loads the system DLLs it
+  calls from System32 only. Setup runs elevated from the download folder, where a planted `cmd.exe` or DLL could
+  otherwise have run as administrator.
+- A banner started by the service no longer steps aside when its single-instance mutex already exists, so a user
+  can't keep the marking off the screen by creating that mutex first.
+- `uninstall` writes back only the color, wallpaper and screen-saver values the banner saves, even if a user has
+  edited the saved copy in their own profile.
+
 ## [1.3.1] - 2026-10-19
 
 ### Fixed

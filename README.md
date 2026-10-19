@@ -10,7 +10,7 @@ display scaling. It replaces the USAF *Banner 3.1* (2003); see [docs/banner-3.1-
   file installs, configures, uninstalls, runs the banner and is the screen saver.
 - **Standalone or domain.** Configure with the command line on workgroup PCs, or with Group Policy (ADMX templates
   included) on domains. Group Policy always wins.
-- **Stays on the right monitor.** Banners are rebuilt after unlock, resume, monitor changes, DPI changes and Explorer
+- **Stays on the right monitor.** Banners are checked and put back after unlock, resume, monitor changes, DPI changes and Explorer
   restarts, and are checked every 2 seconds. This fixes Banner 3.1's "second monitor's banners jump to the main
   screen after unlock" problem.
 - **Can't simply be closed.** A small Windows service (*ClassBanner*, LocalSystem) starts the banner in every
@@ -21,7 +21,7 @@ display scaling. It replaces the USAF *Banner 3.1* (2003); see [docs/banner-3.1-
 - **In Control Panel.** *ClassBanner* appears in Control Panel (Appearance and Personalization, and System and
   Security) and in *Apps & features*. It opens a settings window with a live preview; settings enforced by Group
   Policy are shown locked.
-- **Optional extras:** clock (local or Zulu), classification-colored title bars and highlights, wallpaper, and a
+- **Optional extras:** signed-in user name, clock (local or Zulu), classification-colored title bars and highlights, wallpaper, and a
   classification screen saver.
 
 | Level | Banner | Text |
@@ -171,6 +171,7 @@ you deploy the ClassBanner templates; then remove the old ones. Earlier Applicat
 | `HoverTransparency` | `40` | Percent see-through while the mouse is over the banner (0-90) |
 | `StayAboveFullScreenApps` | `true` | Keep the banner over full-screen presentations and video |
 | `AllowUserExit` | `false` | Adds *Exit* to the banner's menu; the banner then stays closed for that user until they sign in again |
+| `ShowUserName` | `false` | Show the signed-in user's account name on the left. It and the clock are hidden before the marking is ever shortened |
 | `ClockEnabled` | `false` | Show a clock on the right |
 | `ClockFormat` | `ddd dd-MMM-yy HH:mm%TZI%` | [.NET date format](https://learn.microsoft.com/dotnet/standard/base-types/custom-date-and-time-format-strings); `%TZI%` becomes `Z` or `L` |
 | `ClockUseZulu` | `false` | Show UTC |
