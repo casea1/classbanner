@@ -5,6 +5,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-19
+
+### Fixed
+- The banner's user can no longer freeze or remove it without administrator rights (#17): its threads (and every
+  object it creates) get the same locked-down permissions as its process, so suspending or ending them is refused; a
+  hidden or minimized banner window is shown again within 2 seconds; and the service resumes a suspended banner and
+  restarts one whose window thread has ended, logging event 1005.
+- `uninstall` restores profiles that aren't signed in: enabling the privileges needed to load their `NTUSER.DAT`
+  always failed because of a wrong structure layout (#24). The summary now says plainly when a profile could not be
+  restored.
+- After an upgrade from 1.1.0, `uninstall` no longer puts the banner's own colors back: colors, wallpaper or screen
+  saver that are already the banner's are saved as the Windows defaults, and a saved copy that holds them (from 1.2.0)
+  is not restored (#25).
+- Settings window preview shows the standard marking when the banner text doesn't fit the level, as the banner does;
+  saving banner text that fits only Group Policy's level now warns that it depends on the policy (#26).
+- `uninstall` started by a deployment agent or over SSH removes its files even when the caller ends right away, and
+  anything still in use is removed at the next restart (#26).
+- Turning `AllowUserExit` off brings back banners that users had closed (#26).
+- Help listed `--keep-user-settings` twice (#26).
+
+### Changed
+- Renamed to **ClassBanner**: `ClassBanner.exe`, `%ProgramFiles%\ClassBanner`, the *ClassBanner* service and event log
+  source, Group Policy key `HKLM\SOFTWARE\Policies\ClassBanner` and templates `ClassBanner.admx`/`.adml`. Installing
+  over Better Banner (any version) imports its settings, keeps the sign-in notice and users' saved colors, stops and
+  removes its service and banners, and removes Better Banner. Better Banner Group Policy keeps applying until the
+  ClassBanner templates are deployed.
+
+### Added
+- `BannerThickness`: set the banner height in pixels at 100% scaling (12-120), in the settings window, on the
+  command line (`--set BannerThickness=40`) or by Group Policy. It scales with each monitor's display scaling; 0 (the
+  default) keeps the automatic height. Text is made smaller to fit a thin banner.
+
 ## [1.2.0] - 2026-10-18
 
 ### Added

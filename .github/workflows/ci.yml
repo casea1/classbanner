@@ -39,9 +39,9 @@ jobs:
         run: dotnet test --no-build -c Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
 
       - name: Publish native exe
-        run: dotnet publish src/BetterBanner/BetterBanner.csproj -c Release -o publish
+        run: dotnet publish src/ClassBanner/ClassBanner.csproj -c Release -o publish
 
-      - name: Download earlier releases for the upgrade tests
+      - name: Download Better Banner releases for the upgrade tests
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,10 +49,11 @@ jobs:
         run: |
           gh release download v1.0.0-beta.1 --pattern BetterBanner.exe --dir beta1
           gh release download v1.1.0 --pattern BetterBanner.exe --dir v110
+          gh release download v1.2.0 --pattern BetterBanner.exe --dir v120
 
       - name: Smoke test (upgrades, install, service restart, uninstall)
         shell: pwsh
-        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe -Beta1Exe beta1/BetterBanner.exe -PreviousExe v110/BetterBanner.exe
+        run: ./scripts/smoke-test.ps1 -Exe publish/ClassBanner.exe -Beta1Exe beta1/BetterBanner.exe -PreviousExe v110/BetterBanner.exe -ServiceExe v120/BetterBanner.exe
 
       - uses: actions/upload-artifact@v6
         if: always()
@@ -63,7 +64,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: BetterBanner-${{ github.sha }}
+          name: ClassBanner-${{ github.sha }}
           path: |
-            publish/BetterBanner.exe
+            publish/ClassBanner.exe
             policy/

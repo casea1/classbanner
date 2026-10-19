@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <title>Better Banner</title>
+  <title>ClassBanner</title>
   <defs>
     <clipPath id="top"><rect x="30" y="34" width="196" height="40" rx="12"/></clipPath>
     <clipPath id="bottom"><rect x="30" y="182" width="196" height="40" rx="12"/></clipPath>
