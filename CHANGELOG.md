@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-19
+
 ### Fixed
 - The banner's user can no longer freeze or remove it without administrator rights (#17): its threads (and every
   object it creates) get the same locked-down permissions as its process, so suspending or ending them is refused; a
