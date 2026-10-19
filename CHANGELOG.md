@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-19
+
 ### Fixed
 - A full-screen app (such as full-screen Remote Desktop) now keeps covering its monitor's banner when you click a
   window on another monitor. The banner used to come back over it, and sometimes took up to 2 seconds to step behind
