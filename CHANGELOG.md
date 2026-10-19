@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- A full-screen app (such as full-screen Remote Desktop) now keeps covering its monitor's banner when you click a
+  window on another monitor. The banner used to come back over it, and sometimes took up to 2 seconds to step behind
+  it again after you clicked back in. Which monitor has a full-screen app on top is now judged on each monitor by
+  itself, not by which window is active, and it is re-checked the moment the active window changes. A window of
+  another app on top of the full-screen one, such as a local window dragged over it, still brings the banner back.
+
 ## [1.5.0] - 2026-10-19
 
 ### Changed

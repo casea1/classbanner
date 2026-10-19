@@ -74,6 +74,11 @@ internal static unsafe partial class Native
     public const uint SWP_SHOWWINDOW = 0x0040;
     public const int SW_SHOWNOACTIVATE = 4;
     public const uint GW_OWNER = 4;
+    public const uint GW_HWNDNEXT = 2;
+    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
+    public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+    public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
 
     public const uint LWA_ALPHA = 0x2;
     public const uint TME_LEAVE = 0x2;
@@ -295,6 +300,17 @@ internal static unsafe partial class Native
 
     [LibraryImport("user32.dll")]
     public static partial nint GetForegroundWindow();
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetTopWindow(nint hwnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module,
+        delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnhookWinEvent(nint hook);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
