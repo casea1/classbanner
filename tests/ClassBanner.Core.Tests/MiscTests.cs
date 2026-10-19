@@ -366,3 +366,33 @@ public class CaptionLayoutTests
         Assert.InRange(p.Scale, 0.48, 0.5);
     }
 }
+
+public class FullScreenTests
+{
+    private static readonly ScreenRect Monitor = new(1920, 0, 3840, 1080);
+
+    [Fact]
+    public void Full_screen_remote_desktop_covers_its_monitor() =>
+        Assert.True(FullScreen.Covers(new ScreenRect(1920, 0, 3840, 1080), Monitor, "TscShellContainerClass"));
+
+    [Fact]
+    public void Window_larger_than_the_monitor_still_counts() =>
+        Assert.True(FullScreen.Covers(new ScreenRect(1912, -8, 3848, 1088), Monitor, "Chrome_WidgetWin_1"));
+
+    [Fact]
+    public void Maximized_window_inside_the_work_area_does_not() =>
+        Assert.False(FullScreen.Covers(new ScreenRect(1920, 15, 3840, 1020), Monitor, "Notepad"));
+
+    [Fact]
+    public void Full_screen_on_another_monitor_does_not() =>
+        Assert.False(FullScreen.Covers(new ScreenRect(0, 0, 1920, 1080), Monitor, "TscShellContainerClass"));
+
+    [Theory]
+    [InlineData("Progman")]
+    [InlineData("WorkerW")]
+    public void Desktop_is_not_a_full_screen_app(string className) =>
+        Assert.False(FullScreen.Covers(new ScreenRect(0, 0, 3840, 1080), Monitor, className));
+
+    [Fact]
+    public void Off_by_default() => Assert.False(new BannerSettings().StayAboveFullScreenApps);
+}

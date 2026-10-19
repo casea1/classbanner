@@ -67,7 +67,7 @@ internal sealed unsafe class BannerWindow : Win32Window
             rect = abd.rc;
         }
 
-        SetWindowPos(Handle, HWND_TOPMOST, rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top,
+        SetWindowPos(Handle, ZOrderTarget(), rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top,
             SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
@@ -83,10 +83,23 @@ internal sealed unsafe class BannerWindow : Win32Window
         return true;
     }
 
-    public void KeepOnTop()
+    public void KeepOnTop() =>
+        SetWindowPos(Handle, ZOrderTarget(), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+    /// <summary>
+    /// Topmost, unless <see cref="BannerSettings.StayAboveFullScreenApps"/> is off and a full-screen app (full-screen
+    /// Remote Desktop, a presentation, video) is in front on this monitor: then just behind it, so a remote session
+    /// shows its own banner instead of having this one drawn over its top and bottom edges.
+    /// </summary>
+    private nint ZOrderTarget()
     {
-        if (_settings.StayAboveFullScreenApps)
-            SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (_settings.StayAboveFullScreenApps) return HWND_TOPMOST;
+        var front = GetForegroundWindow();
+        if (front == 0 || front == Handle) return HWND_TOPMOST;
+        GetWindowThreadProcessId(front, out var pid);
+        if (pid == (uint)Environment.ProcessId) return HWND_TOPMOST;
+        if (!GetWindowRect(front, out var rect)) return HWND_TOPMOST;
+        return FullScreen.Covers(rect.ToScreenRect(), Slot.MonitorBounds, GetClassName(front)) ? front : HWND_TOPMOST;
     }
 
     public void Redraw() => InvalidateRect(Handle, 0, false);
@@ -156,8 +169,7 @@ internal sealed unsafe class BannerWindow : Win32Window
                     break;
                 case ABN_FULLSCREENAPP:
                     // lParam != 0: a full-screen app opened on this monitor.
-                    if (_settings.StayAboveFullScreenApps) KeepOnTop();
-                    else SetWindowPos(Handle, lParam != 0 ? -2 /* HWND_NOTOPMOST */ : HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    KeepOnTop();
                     break;
             }
             return 0;
