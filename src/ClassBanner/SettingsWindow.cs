@@ -44,7 +44,7 @@ internal sealed class SettingsWindow : Win32Window
     private RECT _previewRect;
 
     private nint _thickness;
-    private nint _level, _caption, _position, _fontSize, _clock, _zulu, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
+    private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
     private nint _status, _save, _cancel, _policyNote;
 
     /// <summary>A label + control (or a full-width control) laid out top to bottom.</summary>
@@ -112,6 +112,7 @@ internal sealed class SettingsWindow : Win32Window
         _rows.Add(new Row(0, _clock, Extra: _zulu));
         Lock(_clock, nameof(BannerSettings.ClockEnabled));
         Lock(_zulu, nameof(BannerSettings.ClockUseZulu));
+        _userName = AddRow(null, Check("Show user name"), nameof(BannerSettings.ShowUserName));
 
         _colors = AddRow(null, Check("Color title bars and highlights to match"), nameof(BannerSettings.EnforceColors));
         _wallpaper = AddRow(null, Check("Classification wallpaper"), nameof(BannerSettings.WallpaperMode));
@@ -176,6 +177,7 @@ internal sealed class SettingsWindow : Win32Window
         SetWindowTextW(_thickness, s.BannerThickness.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SetCheck(_clock, s.ClockEnabled);
         SetCheck(_zulu, s.ClockUseZulu);
+        SetCheck(_userName, s.ShowUserName);
         SetCheck(_colors, s.EnforceColors);
         SetCheck(_wallpaper, s.WallpaperMode != WallpaperMode.Off);
         SetCheck(_screenSaver, s.EnforceScreenSaver);
@@ -365,6 +367,7 @@ internal sealed class SettingsWindow : Win32Window
         if (IsValidThickness(thickness)) Add(nameof(BannerSettings.BannerThickness), thickness);
         Add(nameof(BannerSettings.ClockEnabled), IsChecked(_clock) ? "1" : "0");
         Add(nameof(BannerSettings.ClockUseZulu), IsChecked(_zulu) ? "1" : "0");
+        Add(nameof(BannerSettings.ShowUserName), IsChecked(_userName) ? "1" : "0");
         Add(nameof(BannerSettings.EnforceColors), IsChecked(_colors) ? "1" : "0");
 
         // Keep an administrator-chosen image; the checkbox only switches the generated wallpaper on and off.

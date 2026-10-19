@@ -6,6 +6,7 @@
   <resources>
     <stringTable>
       <string id="SUPPORTED_ClassBanner1">ClassBanner 1.0 or later</string>
+      <string id="SUPPORTED_ClassBanner1_4">ClassBanner 1.4 or later</string>
       <string id="Cat_ClassBanner">ClassBanner</string>
       <string id="Cat_Appearance">Appearance</string>
       <string id="Cat_Desktop">Desktop enforcement</string>
@@ -48,6 +49,11 @@ Use "Banner text" to add caveats such as //NOFORN. Group Policy overrides the ma
 
       <string id="AllowUserExit">Allow users to close the banner</string>
       <string id="AllowUserExit_Help">When enabled, the banner's right-click menu has an Exit item. Disabled by default.</string>
+
+      <string id="ShowUserName">Show user name</string>
+      <string id="ShowUserName_Help">Shows the signed-in user's account name on the left side of every banner. Disabled by default.
+
+If the banner is too narrow for the marking, the clock and the user name are hidden before the marking is ever shortened.</string>
 
       <string id="Clock">Show clock</string>
       <string id="Clock_Help">Shows the date and time on the right side of the banner.

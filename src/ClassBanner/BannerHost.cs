@@ -68,6 +68,9 @@ internal sealed unsafe class BannerHost : Win32Window
 
     public string ClockText { get; private set; } = "";
 
+    /// <summary>The signed-in user's name, or "" when <see cref="BannerSettings.ShowUserName"/> is off.</summary>
+    public string UserNameText => Settings.ShowUserName ? Environment.UserName : "";
+
     public void RequestReconcile() => SetTimer(Handle, TimerDebounce, DebounceMs, 0);
 
     protected override nint WndProc(uint msg, nint wParam, nint lParam)

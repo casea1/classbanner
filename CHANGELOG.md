@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Show user name** (`ShowUserName`, off by default): the signed-in user's account name on the left of every
+  banner. Set it in Group Policy (*Appearance > Show user name*, new in the 1.4 templates), the settings window or
+  `config --set ShowUserName=1`. On a narrow screen the clock is hidden first, then the user name, before the marking
+  is ever shortened.
+
 ### Security
 - `install`/`uninstall` start `cmd.exe` and `powershell.exe` by full path, and the program loads the system DLLs it
   calls from System32 only. Setup runs elevated from the download folder, where a planted `cmd.exe` or DLL could

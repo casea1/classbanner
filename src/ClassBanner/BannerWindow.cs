@@ -185,14 +185,23 @@ internal sealed unsafe class BannerWindow : Win32Window
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, ToColorRef(_settings.EffectiveForeColor));
 
-            // The marking is never cut off; the clock gives way first (see CaptionLayout).
+            // The marking is never cut off; the clock, then the user name, give way first (see CaptionLayout).
             const uint flags = DT_SINGLELINE | DT_NOPREFIX;
             var caption = _settings.EffectiveCaption;
             var clock = _host.ClockText;
             var pad = (int)Math.Round(8 * Slot.Dpi / (double)BannerLayout.BaseDpi);
             var captionWidth = MeasureWidth(hdc, caption, flags);
             var clockWidth = clock.Length > 0 ? MeasureWidth(hdc, clock, flags) : 0;
-            var placement = CaptionLayout.Place(client.Right - client.Left, captionWidth, clockWidth, pad);
+            var user = _host.UserNameText;
+            var userWidth = user.Length > 0 ? MeasureWidth(hdc, user, flags) : 0;
+            var placement = CaptionLayout.Place(client.Right - client.Left, captionWidth, userWidth, clockWidth, pad);
+
+            if (placement.ShowUser && userWidth > 0)
+            {
+                var userRect = client;
+                userRect.Left += pad;
+                DrawTextW(hdc, user, -1, ref userRect, DT_LEFT | DT_VCENTER | flags);
+            }
 
             if (placement.ShowClock && clockWidth > 0)
             {

@@ -61,6 +61,9 @@ public sealed class BannerSettings
     /// <summary>Show "Exit" on the banner menu.</summary>
     public bool AllowUserExit { get; set; }
 
+    /// <summary>Show the signed-in user's name on the left of the banner.</summary>
+    public bool ShowUserName { get; set; }
+
     public bool ClockEnabled { get; set; }
 
     /// <summary>.NET custom date/time format. %TZI% becomes "Z" (Zulu) or "L" (local).</summary>

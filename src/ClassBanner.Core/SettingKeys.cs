@@ -22,6 +22,7 @@ public static class SettingKeys
             [nameof(BannerSettings.HoverTransparency)] = (s, v) => TryInt(v, 0, 90, out var i) && Set(() => s.HoverTransparency = i),
             [nameof(BannerSettings.StayAboveFullScreenApps)] = (s, v) => TryBool(v, out var b) && Set(() => s.StayAboveFullScreenApps = b),
             [nameof(BannerSettings.AllowUserExit)] = (s, v) => TryBool(v, out var b) && Set(() => s.AllowUserExit = b),
+            [nameof(BannerSettings.ShowUserName)] = (s, v) => TryBool(v, out var b) && Set(() => s.ShowUserName = b),
             [nameof(BannerSettings.ClockEnabled)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockEnabled = b),
             [nameof(BannerSettings.ClockFormat)] = (s, v) => BannerText.IsValidClockFormat(v) && Set(() => s.ClockFormat = v),
             [nameof(BannerSettings.ClockUseZulu)] = (s, v) => TryBool(v, out var b) && Set(() => s.ClockUseZulu = b),
