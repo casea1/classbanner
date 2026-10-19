@@ -10,7 +10,7 @@ display scaling. It replaces the USAF *Banner 3.1* (2003); see [docs/banner-3.1-
   file installs, configures, uninstalls, runs the banner and is the screen saver.
 - **Standalone or domain.** Configure with the command line on workgroup PCs, or with Group Policy (ADMX templates
   included) on domains. Group Policy always wins.
-- **Stays on the right monitor.** Banners are rebuilt after unlock, resume, monitor changes, DPI changes and Explorer
+- **Stays on the right monitor.** Banners are checked and put back after unlock, resume, monitor changes, DPI changes and Explorer
   restarts, and are checked every 2 seconds. This fixes Banner 3.1's "second monitor's banners jump to the main
   screen after unlock" problem.
 - **Can't simply be closed.** A small Windows service (*ClassBanner*, LocalSystem) starts the banner in every

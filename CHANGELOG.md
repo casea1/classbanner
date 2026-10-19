@@ -11,6 +11,12 @@ All notable changes to this project are documented here. The format follows
   `config --set ShowUserName=1`. On a narrow screen the clock is hidden first, then the user name, before the marking
   is ever shortened.
 
+### Fixed
+- Banners no longer disappear and reappear once or twice after unlocking or waking the PC. They were rebuilt after
+  every unlock, and again for each display change while the monitors came back. Now the banner waits until the displays
+  are quiet, then checks once: a banner that moved is put back, and all of them are rebuilt only if the monitor layout
+  really changed.
+
 ### Security
 - `install`/`uninstall` start `cmd.exe` and `powershell.exe` by full path, and the program loads the system DLLs it
   calls from System32 only. Setup runs elevated from the download folder, where a planted `cmd.exe` or DLL could

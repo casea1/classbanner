@@ -18,12 +18,13 @@ internal sealed unsafe class BannerHost : Win32Window
     private const nuint TimerDebounce = 2;
     private const nuint TimerClock = 3;
     private const nuint TimerSettings = 4;
-    private const nuint TimerRebuild = 5;
+    private const nuint TimerSettled = 5;
 
     private const uint ReconcileIntervalMs = 2000;
     private const uint DebounceMs = 500;
     private const uint SettingsIntervalMs = 30_000;
-    private const uint AfterUnlockRebuildMs = 1500;
+    private const uint SettleMs = 1500;
+    private const long MaxSettleMs = 10_000;
 
     private const uint MenuRecover = 1;
     private const uint MenuAbout = 2;
@@ -71,7 +72,35 @@ internal sealed unsafe class BannerHost : Win32Window
     /// <summary>The signed-in user's name, or "" when <see cref="BannerSettings.ShowUserName"/> is off.</summary>
     public string UserNameText => Settings.ShowUserName ? Environment.UserName : "";
 
-    public void RequestReconcile() => SetTimer(Handle, TimerDebounce, DebounceMs, 0);
+    /// <summary>True from an unlock or resume until the displays have been quiet for <see cref="SettleMs"/>.</summary>
+    private bool _settling;
+    private long _settleStarted;
+
+    public void RequestReconcile()
+    {
+        // While the displays are still coming back, wait for them to go quiet instead of reacting to each step.
+        // Never longer than MaxSettleMs, so a display that keeps flickering can't hold off the check.
+        if (_settling)
+        {
+            if (Environment.TickCount64 - _settleStarted < MaxSettleMs) SetTimer(Handle, TimerSettled, SettleMs, 0);
+            return;
+        }
+        SetTimer(Handle, TimerDebounce, DebounceMs, 0);
+    }
+
+    /// <summary>
+    /// After an unlock or resume, monitors can drop out and come back one by one and Windows may move windows to the
+    /// primary screen. Reacting to each step rebuilt the banners once or twice, and rebuilding unconditionally after
+    /// every unlock made them flash even when nothing had moved. Wait until the displays are quiet, then check once:
+    /// only a banner that is actually wrong is put back, and a rebuild happens only if the layout really changed.
+    /// </summary>
+    private void SettleThenCheck()
+    {
+        _settling = true;
+        _settleStarted = Environment.TickCount64;
+        KillTimer(Handle, TimerDebounce);
+        SetTimer(Handle, TimerSettled, SettleMs, 0);
+    }
 
     protected override nint WndProc(uint msg, nint wParam, nint lParam)
     {
@@ -99,16 +128,17 @@ internal sealed unsafe class BannerHost : Win32Window
             case WM_WTSSESSION_CHANGE:
                 if ((int)wParam is WTS_SESSION_UNLOCK or WTS_CONSOLE_CONNECT or WTS_REMOTE_CONNECT)
                 {
-                    // Displays can drop out while locked and Windows moves windows to the primary screen. Rebuild once
-                    // they have settled; the periodic reconcile keeps checking after that.
-                    Log.Info($"Session change {(int)wParam}; rebuilding banners.");
-                    SetTimer(Handle, TimerRebuild, AfterUnlockRebuildMs, 0);
+                    Log.Info($"Session change {(int)wParam}; checking banners once the displays settle.");
+                    SettleThenCheck();
                 }
                 return 0;
 
             case WM_POWERBROADCAST:
                 if ((int)wParam is PBT_APMRESUMEAUTOMATIC or PBT_APMRESUMESUSPEND)
-                    SetTimer(Handle, TimerRebuild, AfterUnlockRebuildMs, 0);
+                {
+                    Log.Info("Resumed; checking banners once the displays settle.");
+                    SettleThenCheck();
+                }
                 return 1;
 
             case WM_QUERYENDSESSION:
@@ -138,16 +168,17 @@ internal sealed unsafe class BannerHost : Win32Window
         {
             case TimerReconcile:
                 if (CheckForUpgrade()) break;
-                Reconcile();
+                if (!_settling) Reconcile();
                 foreach (var banner in _banners) banner.KeepOnTop();
                 break;
             case TimerDebounce:
                 KillTimer(Handle, TimerDebounce);
                 Reconcile();
                 break;
-            case TimerRebuild:
-                KillTimer(Handle, TimerRebuild);
-                Rebuild("session unlocked or resumed");
+            case TimerSettled:
+                KillTimer(Handle, TimerSettled);
+                _settling = false;
+                Reconcile();
                 break;
             case TimerClock:
                 UpdateClock();
