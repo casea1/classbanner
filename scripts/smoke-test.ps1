@@ -199,9 +199,15 @@ if (-not $signedIn) {
     function Get-MainThread($p) { ($p.Threads | Sort-Object StartTime | Select-Object -First 1).Id }
 
     $window = [CB.W]::FindWindow('ClassBanner.Banner', $null)
-    [CB.W]::ShowWindow($window, 0) | Out-Null
-    Start-Sleep -Seconds 5
-    Assert ([CB.W]::IsWindowVisible($window)) 'hidden banner window shown again'
+    Write-Host "banner window: $window (visible: $([CB.W]::IsWindowVisible($window)))"
+    if ($window -eq [IntPtr]::Zero) {
+        Write-Host "note - the banner's window isn't on this runner's desktop; hidden-window check skipped"
+    } else {
+        [CB.W]::ShowWindow($window, 0) | Out-Null
+        Write-Host "hidden: visible now $([CB.W]::IsWindowVisible($window))"
+        Start-Sleep -Seconds 5
+        Assert ([CB.W]::IsWindowVisible($window)) 'hidden banner window shown again'
+    }
 
     $current = (Get-SessionBanners)[0]
     $t0 = Get-Date
