@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.3.1] - 2026-10-19
 
+### Fixed
+- An ended banner is logged as event 1001 (stopped unexpectedly, restarted) again; it could be logged as 1005
+  (showing nothing) when the service checked it in the moment between its window thread and its process ending.
+
 ### Changed
 - Banners are thinner by default: `BannerThickness` now defaults to 15 pixels at 100% scaling (was automatic, about
   24). Set `BannerThickness=0` for the previous automatic size.
