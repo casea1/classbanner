@@ -55,8 +55,11 @@ public sealed class BannerSettings
     /// <summary>How see-through the banner gets while the mouse is over it, in percent (0-90).</summary>
     public int HoverTransparency { get; set; } = 40;
 
-    /// <summary>Keep the banner above full-screen apps (presentations, video) so the marking is never hidden.</summary>
-    public bool StayAboveFullScreenApps { get; set; } = true;
+    /// <summary>
+    /// Keep the banner above full-screen apps (presentations, video, full-screen Remote Desktop). Off by default: a
+    /// full-screen app in front covers the banner on its monitor, so a remote session shows its own banner instead.
+    /// </summary>
+    public bool StayAboveFullScreenApps { get; set; }
 
     /// <summary>Show "Exit" on the banner menu.</summary>
     public bool AllowUserExit { get; set; }

@@ -45,7 +45,9 @@ Use "Banner text" to add caveats such as //NOFORN. Group Policy overrides the ma
       <string id="HoverTransparency_Help">How see-through the banner becomes while the mouse is over it, so text underneath can be read (0-90 percent, default 40). 0 keeps it solid.</string>
 
       <string id="StayAboveFullScreenApps">Keep banner above full-screen applications</string>
-      <string id="StayAboveFullScreenApps_Help">When enabled (default), the banner stays visible over full-screen presentations and video. When disabled, full-screen applications may cover it.</string>
+      <string id="StayAboveFullScreenApps_Help">When enabled, the banner stays visible over full-screen applications such as presentations, video and full-screen Remote Desktop.
+
+When disabled or not configured (default since 1.5), a full-screen application in front covers the banner on that monitor; the banner comes back as soon as you switch away from it. Use this when users connect to other systems with full-screen Remote Desktop: the remote system shows its own banner, and this computer's banner no longer hides the top and bottom of the remote screen.</string>
 
       <string id="AllowUserExit">Allow users to close the banner</string>
       <string id="AllowUserExit_Help">When enabled, the banner's right-click menu has an Exit item. Disabled by default.</string>

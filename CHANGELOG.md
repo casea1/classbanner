@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-19
+
+### Changed
+- **Full-screen apps now cover the banner by default** (`StayAboveFullScreenApps` is off). With full-screen Remote
+  Desktop, this computer's banner used to sit over the top of the remote screen (covering the connection bar and the
+  remote system's own banner) and float above where the taskbar would be on a Linux desktop. Now, while a full-screen
+  app is in front on a monitor, that monitor's banner steps behind it, and it comes back as soon as you switch away.
+  The remote system should show its own banner. Turn it back on with Group Policy, the new checkbox in the settings
+  window, or `config --set StayAboveFullScreenApps=1`. PCs upgraded from 1.4.0 or earlier keep the value they have
+  saved (on), so set it there to change them.
+
 ## [1.4.0] - 2026-10-19
 
 ### Added

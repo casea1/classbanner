@@ -294,6 +294,9 @@ internal static unsafe partial class Native
     public static partial bool GetWindowRect(nint hwnd, out RECT rect);
 
     [LibraryImport("user32.dll")]
+    public static partial nint GetForegroundWindow();
+
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetClientRect(nint hwnd, out RECT rect);
 

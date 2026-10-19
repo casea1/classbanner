@@ -44,7 +44,7 @@ internal sealed class SettingsWindow : Win32Window
     private RECT _previewRect;
 
     private nint _thickness;
-    private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
+    private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _aboveFullScreen, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
     private nint _status, _save, _cancel, _policyNote;
 
     /// <summary>A label + control (or a full-width control) laid out top to bottom.</summary>
@@ -113,6 +113,7 @@ internal sealed class SettingsWindow : Win32Window
         Lock(_clock, nameof(BannerSettings.ClockEnabled));
         Lock(_zulu, nameof(BannerSettings.ClockUseZulu));
         _userName = AddRow(null, Check("Show user name"), nameof(BannerSettings.ShowUserName));
+        _aboveFullScreen = AddRow(null, Check("Stay above full-screen apps (incl. Remote Desktop)"), nameof(BannerSettings.StayAboveFullScreenApps));
 
         _colors = AddRow(null, Check("Color title bars and highlights to match"), nameof(BannerSettings.EnforceColors));
         _wallpaper = AddRow(null, Check("Classification wallpaper"), nameof(BannerSettings.WallpaperMode));
@@ -178,6 +179,7 @@ internal sealed class SettingsWindow : Win32Window
         SetCheck(_clock, s.ClockEnabled);
         SetCheck(_zulu, s.ClockUseZulu);
         SetCheck(_userName, s.ShowUserName);
+        SetCheck(_aboveFullScreen, s.StayAboveFullScreenApps);
         SetCheck(_colors, s.EnforceColors);
         SetCheck(_wallpaper, s.WallpaperMode != WallpaperMode.Off);
         SetCheck(_screenSaver, s.EnforceScreenSaver);
@@ -368,6 +370,7 @@ internal sealed class SettingsWindow : Win32Window
         Add(nameof(BannerSettings.ClockEnabled), IsChecked(_clock) ? "1" : "0");
         Add(nameof(BannerSettings.ClockUseZulu), IsChecked(_zulu) ? "1" : "0");
         Add(nameof(BannerSettings.ShowUserName), IsChecked(_userName) ? "1" : "0");
+        Add(nameof(BannerSettings.StayAboveFullScreenApps), IsChecked(_aboveFullScreen) ? "1" : "0");
         Add(nameof(BannerSettings.EnforceColors), IsChecked(_colors) ? "1" : "0");
 
         // Keep an administrator-chosen image; the checkbox only switches the generated wallpaper on and off.
