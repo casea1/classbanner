@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- `install`/`uninstall` start `cmd.exe` and `powershell.exe` by full path, and the program loads the system DLLs it
+  calls from System32 only. Setup runs elevated from the download folder, where a planted `cmd.exe` or DLL could
+  otherwise have run as administrator.
+- A banner started by the service no longer steps aside when its single-instance mutex already exists, so a user
+  can't keep the marking off the screen by creating that mutex first.
+- `uninstall` writes back only the color, wallpaper and screen-saver values the banner saves, even if a user has
+  edited the saved copy in their own profile.
+
 ## [1.3.1] - 2026-10-19
 
 ### Fixed

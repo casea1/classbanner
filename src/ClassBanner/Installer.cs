@@ -161,7 +161,7 @@ internal static class Installer
                 var delete = cmd.KeepSettings
                     ? $"del /f /q \"{InstalledExe}\" \"{InstalledScr}\" \"{Path.Combine(InstallDir, "*.old-*")}\""
                     : $"rmdir /s /q \"{InstallDir}\"";
-                StartDetached($"cmd.exe /c ping 127.0.0.1 -n 3 > nul & {delete}");
+                StartDetached($"\"{SystemTool("cmd.exe")}\" /c ping 127.0.0.1 -n 3 > nul & {delete}");
             }
             else if (cmd.KeepSettings)
             {
@@ -235,7 +235,7 @@ internal static class Installer
             $"$s.IconLocation = {Quote(InstalledExe + ",0")}; $s.Description = 'ClassBanner settings'; $s.Save()";
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("powershell.exe", $"-NoProfile -NonInteractive -Command \"{script}\"")
+            using var process = Process.Start(new ProcessStartInfo(SystemTool(@"WindowsPowerShell\v1.0\powershell.exe"), $"-NoProfile -NonInteractive -Command \"{script}\"")
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
@@ -551,6 +551,12 @@ internal static class Installer
             }
         }
     }
+
+    /// <summary>
+    /// Full path of a Windows tool. install and uninstall run elevated, often from the download folder, and a bare
+    /// "cmd.exe" is looked up in the program's own folder first, so a file planted there would run as administrator.
+    /// </summary>
+    private static string SystemTool(string name) => Path.Combine(Environment.SystemDirectory, name);
 
     /// <summary>Marks a file (or empty folder) for deletion at the next restart (MoveFileEx DELAY_UNTIL_REBOOT).</summary>
     private static void DeleteAtRestart(string path)

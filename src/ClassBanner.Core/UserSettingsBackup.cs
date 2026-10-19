@@ -57,6 +57,11 @@ public static class UserSettingsBackup
     public static readonly (string Key, string[] Names)[] ScreenSaver =
         [(DesktopKey, ["SCRNSAVE.EXE", "ScreenSaveActive", "ScreenSaveTimeOut", "ScreenSaverIsSecure"])];
 
+    private static readonly Dictionary<string, HashSet<string>> KnownValues =
+        Colors.Concat(Wallpaper).Concat(ScreenSaver)
+            .GroupBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.SelectMany(x => x.Names).ToHashSet(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Saves each value's current state the first time only, so later runs never overwrite the user's original.</summary>
     /// <param name="bannerAccentColors">
     /// Accent values the banner writes. A value that is already the banner's own (left by 1.1.0, or by an earlier
@@ -104,11 +109,17 @@ public static class UserSettingsBackup
             {
                 var key = savedKey.Replace('/', '\\');
                 var saved = SavedFor(key);
-                foreach (var name in store.ValueNames(saved).Where(n => n != AbsentValue))
+                // Uninstall runs as administrator and the saved copy is in the user's own hive, which the user can
+                // edit: only ever write back the values the banner itself saves.
+                if (!KnownValues.TryGetValue(key, out var allowed))
+                {
+                    continue;
+                }
+                foreach (var name in store.ValueNames(saved).Where(n => n != AbsentValue && allowed.Contains(n)))
                 {
                     if (store.TryGet(saved, name, out var value) && value is not null) store.Set(key, name, value);
                 }
-                foreach (var name in Absent(store, saved)) store.Delete(key, name);
+                foreach (var name in Absent(store, saved).Where(allowed.Contains)) store.Delete(key, name);
             }
             store.DeleteTree(SavedKey);
             DeleteProductKeyIfEmpty(store);
