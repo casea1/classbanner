@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Banners are thinner by default: `BannerThickness` now defaults to 15 pixels at 100% scaling (was automatic, about
+  24). Set `BannerThickness=0` for the previous automatic size.
+
 ## [1.3.0] - 2026-10-19
 
 ### Fixed

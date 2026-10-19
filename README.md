@@ -167,7 +167,7 @@ you deploy the ClassBanner templates; then remove the old ones. Earlier Applicat
 | `BackColor`, `ForeColor` | *(standard)* | `#RRGGBB` overrides. Colors other than the level's standard ones are applied, with a warning in `show` and the log |
 | `Position` | `Both` | `Top`, `Bottom`, `Both` |
 | `FontSize` | `10` | Points, 8-36. Scaled per monitor for display scaling |
-| `BannerThickness` | `0` | Banner height in pixels at 100% scaling (12-120), scaled per monitor; `0` fits the text. Text shrinks to fit a thin banner |
+| `BannerThickness` | `15` | Banner height in pixels at 100% scaling (12-120), scaled per monitor; `0` sizes it to fit the text. Text shrinks to fit a thin banner |
 | `HoverTransparency` | `40` | Percent see-through while the mouse is over the banner (0-90) |
 | `StayAboveFullScreenApps` | `true` | Keep the banner over full-screen presentations and video |
 | `AllowUserExit` | `false` | Adds *Exit* to the banner's menu; the banner then stays closed for that user until they sign in again |

@@ -47,8 +47,10 @@ public sealed class BannerSettings
     /// <summary>Banner text size in points (8-36). Scaled for each monitor's DPI.</summary>
     public int FontSize { get; set; } = 10;
 
+    public const int DefaultThickness = 15;
+
     /// <summary>Banner thickness in pixels at 100% scaling (12-120), scaled for each monitor. 0 = automatic (fits the text).</summary>
-    public int BannerThickness { get; set; }
+    public int BannerThickness { get; set; } = DefaultThickness;
 
     /// <summary>How see-through the banner gets while the mouse is over it, in percent (0-90).</summary>
     public int HoverTransparency { get; set; } = 40;
