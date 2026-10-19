@@ -202,3 +202,15 @@ public class LayoutTests
         Assert.False(BannerLayout.IsInPlace(new ExistingBanner(0, slot, squashed)));
     }
 }
+
+public class DefaultThicknessTests
+{
+    [Fact]
+    public void Banners_default_to_15_pixels_at_100_percent()
+    {
+        var settings = new BannerSettings();
+        Assert.Equal(15, settings.BannerThickness);
+        Assert.Equal(15, BannerLayout.BannerHeight(settings.FontSize, 96, settings.BannerThickness));
+        Assert.Equal(15, SettingsSerializer.Parse("""{ "Level": "Secret" }""").BannerThickness);
+    }
+}
