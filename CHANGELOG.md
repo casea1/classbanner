@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-19
+
 ### Changed
 - **Full-screen apps now cover the banner by default** (`StayAboveFullScreenApps` is off). With full-screen Remote
   Desktop, this computer's banner used to sit over the top of the remote screen (covering the connection bar and the
