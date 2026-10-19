@@ -48,13 +48,13 @@ jobs:
 
       - name: Publish native exe
         run: >-
-          dotnet publish src/BetterBanner/BetterBanner.csproj -c Release -o publish
+          dotnet publish src/ClassBanner/ClassBanner.csproj -c Release -o publish
           -p:Version=${{ steps.version.outputs.version }}
           -p:SourceRevisionId=${{ github.sha }}
 
       - name: Smoke test
         shell: pwsh
-        run: ./scripts/smoke-test.ps1 -Exe publish/BetterBanner.exe
+        run: ./scripts/smoke-test.ps1 -Exe publish/ClassBanner.exe
 
       - name: Package
         shell: pwsh
@@ -63,8 +63,8 @@ jobs:
         run: |
           $v = $env:VERSION
           New-Item -ItemType Directory dist | Out-Null
-          Copy-Item publish/BetterBanner.exe dist/BetterBanner.exe
-          Compress-Archive -Path policy/* -DestinationPath "dist/BetterBanner-$v-GroupPolicy.zip"
+          Copy-Item publish/ClassBanner.exe dist/ClassBanner.exe
+          Compress-Archive -Path policy/* -DestinationPath "dist/ClassBanner-$v-GroupPolicy.zip"
           Get-ChildItem dist -File | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
           } | Set-Content dist/SHA256SUMS.txt -Encoding ascii
@@ -79,4 +79,4 @@ jobs:
           $tag = $env:TAG
           $prerelease = if ($tag -match '-') { '--prerelease' } else { $null }
           # For a pushed tag the tag exists; for "Run workflow" gh creates it on the built commit.
-          gh release create $tag (Get-ChildItem dist -File).FullName --title "Better Banner $tag" --generate-notes --target $env:GITHUB_SHA $prerelease
+          gh release create $tag (Get-ChildItem dist -File).FullName --title "ClassBanner $tag" --generate-notes --target $env:GITHUB_SHA $prerelease

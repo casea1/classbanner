@@ -1,4 +1,4 @@
-"""Generates the Better Banner logo: assets/logo.svg, assets/logo.png and src/BetterBanner/BetterBanner.ico.
+"""Generates the ClassBanner logo: assets/logo.svg, assets/logo.png and src/ClassBanner/ClassBanner.ico.
 
 The mark is a dark screen framed by a top and bottom banner, each striped in the six classification colors
 (U, CUI, C, S, TS, TS//SCI). Run: python3 tools/icon/make_icon.py  (needs Pillow)
@@ -51,7 +51,7 @@ def svg():
     seg = (BAND_X1 - BAND_X0) / len(COLORS)
     parts = [
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">',
-        f'  <title>Better Banner</title>',
+        f'  <title>ClassBanner</title>',
         '  <defs>',
     ]
     for name, y in (("top", TOP_Y), ("bottom", BOTTOM_Y)):
@@ -78,6 +78,6 @@ if __name__ == "__main__":
     draw(512).save(os.path.join(ROOT, "assets", "logo.png"))
     sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]
     images = [draw(n) for n in sizes]
-    images[-1].save(os.path.join(ROOT, "src", "BetterBanner", "BetterBanner.ico"),
+    images[-1].save(os.path.join(ROOT, "src", "ClassBanner", "ClassBanner.ico"),
                     sizes=[(n, n) for n in sizes], append_images=images[:-1])
-    print("wrote assets/logo.svg, assets/logo.png, src/BetterBanner/BetterBanner.ico")
+    print("wrote assets/logo.svg, assets/logo.png, src/ClassBanner/ClassBanner.ico")

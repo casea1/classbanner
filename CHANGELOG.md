@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Renamed to **ClassBanner**: `ClassBanner.exe`, `%ProgramFiles%\ClassBanner`, the *ClassBanner* service and event log
+  source, Group Policy key `HKLM\SOFTWARE\Policies\ClassBanner` and templates `ClassBanner.admx`/`.adml`. Installing
+  over Better Banner (any version) imports its settings, keeps the sign-in notice and users' saved colors, stops and
+  removes its service and banners, and removes Better Banner. Better Banner Group Policy keeps applying until the
+  ClassBanner templates are deployed.
+
 ### Added
 - `BannerThickness`: set the banner height in pixels at 100% scaling (12-120), in the settings window, on the
   command line (`--set BannerThickness=40`) or by Group Policy. It scales with each monitor's display scaling; 0 (the

@@ -1,30 +1,31 @@
 <#
 .SYNOPSIS
-  End-to-end check of a published BetterBanner.exe on a real Windows machine (used by CI; needs admin).
+  End-to-end check of a published ClassBanner.exe on a real Windows machine (used by CI; needs admin).
   Installs, verifies files/registry/settings, runs the banner briefly, then uninstalls and verifies cleanup.
 #>
 param(
     [Parameter(Mandatory)] [string] $Exe,
-    # Optional: published v1.0.0-beta.1 and v1.1.0 exes, to test upgrading from them.
+    # Optional: published Better Banner exes (v1.0.0-beta.1, v1.1.0, v1.2.0), to test upgrading from them.
     [string] $Beta1Exe,
-    [string] $PreviousExe
+    [string] $PreviousExe,
+    [string] $ServiceExe
 )
 
 $ErrorActionPreference = 'Stop'
-$installDir = Join-Path $env:ProgramFiles 'BetterBanner'
+$installDir = Join-Path $env:ProgramFiles 'ClassBanner'
 $settingsFile = Join-Path $installDir 'settings.json'
-$log = Join-Path $env:LOCALAPPDATA 'BetterBanner\BetterBanner.log'
+$log = Join-Path $env:LOCALAPPDATA 'ClassBanner\ClassBanner.log'
 
 function Invoke-Banner([string[]] $Arguments, [int] $ExpectedExitCode = 0) {
     # Start-Process does not quote array elements, so quote anything with spaces or quotes ourselves.
     $commandLine = ($Arguments | ForEach-Object { if ($_ -eq '') { '""' } elseif ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
     $p = Start-Process -FilePath $Exe -ArgumentList $commandLine -Wait -PassThru -NoNewWindow
-    if ($p.ExitCode -ne $ExpectedExitCode) { throw "BetterBanner $($Arguments -join ' ') exited with $($p.ExitCode), expected $ExpectedExitCode" }
+    if ($p.ExitCode -ne $ExpectedExitCode) { throw "ClassBanner $($Arguments -join ' ') exited with $($p.ExitCode), expected $ExpectedExitCode" }
 }
-function Get-Banners { @(Get-Process -Name BetterBanner -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$installDir\*" }) }
+function Get-Banners { @(Get-Process -Name ClassBanner -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$installDir\*" }) }
 function Assert($Condition, [string] $Message) {
     if ($Condition) { Write-Host "ok - $Message"; return }
-    Write-Host "--- BetterBanner.log ---"
+    Write-Host "--- ClassBanner.log ---"
     if (Test-Path $log) { Get-Content $log | Write-Host } else { Write-Host '(no log)' }
     throw "FAILED: $Message"
 }
@@ -33,39 +34,46 @@ $dwmKey = 'HKCU:\SOFTWARE\Microsoft\Windows\DWM'
 if (-not (Test-Path $dwmKey)) { New-Item $dwmKey | Out-Null }
 Set-ItemProperty $dwmKey ColorPrevalence 0 -Type DWord
 $size = (Get-Item $Exe).Length / 1MB
-Write-Host ("BetterBanner.exe is {0:N2} MB" -f $size)
+Write-Host ("ClassBanner.exe is {0:N2} MB" -f $size)
 Assert ($size -lt 15) 'exe is small'
 
 Invoke-Banner @('version')
 
-# Upgrading from an earlier release: settings and the sign-in notice carry over, the old Run-key banner is stopped and
-# the Run key removed (the service replaces it), and beta.1's ProgramData folder is removed.
+# Upgrading from Better Banner (the name up to 1.2): settings and the sign-in notice carry over; its banners, service,
+# Run key, Apps & features entry, Start menu entry and folders are removed; ClassBanner's service replaces them.
 function Test-UpgradeFrom([string] $OldExe, [string] $Label) {
+    $oldDir = Join-Path $env:ProgramFiles 'BetterBanner'
     $legacyDir = Join-Path $env:ProgramData 'BetterBanner'
     $p = Start-Process -FilePath $OldExe -ArgumentList 'install --level S --caption "SECRET//NOFORN" --logon-title Notice --logon-text "Authorized use only" --no-start --quiet' -Wait -PassThru -NoNewWindow
-    Assert ($p.ExitCode -eq 0 -and (Test-Path "$installDir\BetterBanner.exe")) "$Label installed"
-    $oldBanner = Start-Process -FilePath "$installDir\BetterBanner.exe" -PassThru
-    Start-Sleep -Seconds 3
+    Assert ($p.ExitCode -eq 0 -and (Test-Path "$oldDir\BetterBanner.exe")) "$Label installed"
+    if (Get-Service BetterBanner -ErrorAction SilentlyContinue) { Start-Service BetterBanner } else { Start-Process -FilePath "$oldDir\BetterBanner.exe" | Out-Null }
+    Start-Sleep -Seconds 4
 
     Invoke-Banner @('install', '--no-start')
     $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
-    Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN') "$Label settings kept without --level"
-    Assert (-not (Test-Path $legacyDir)) "$Label ProgramData folder removed"
+    Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN') "$Label settings imported without --level"
     $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
     Assert ($notice.legalnoticetext -eq 'Authorized use only') "$Label sign-in notice kept"
-    Assert ($oldBanner.HasExited) "$Label banner stopped"
-    Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').BetterBanner) "$Label Run key replaced"
-    Assert ($null -ne (Get-Service BetterBanner -ErrorAction SilentlyContinue)) "$Label replaced by the service"
+    Assert (@(Get-Process -Name BetterBanner -ErrorAction SilentlyContinue).Count -eq 0) "$Label banners stopped"
+    Assert ($null -eq (Get-Service BetterBanner -ErrorAction SilentlyContinue)) "$Label service removed"
+    Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').BetterBanner) "$Label Run key removed"
+    Assert (-not (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BetterBanner')) "$Label removed from Apps & features"
+    Assert (-not (Test-Path (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Better Banner.lnk'))) "$Label Start menu entry removed"
+    Assert (-not (Test-Path $oldDir) -and -not (Test-Path $legacyDir)) "$Label folders removed"
+    Assert ($null -ne (Get-Service ClassBanner -ErrorAction SilentlyContinue)) "$Label replaced by the ClassBanner service"
 
     Invoke-Banner @('uninstall')
     Start-Sleep -Seconds 1
     Assert (-not (Test-Path $installDir)) "clean slate after the $Label upgrade test"
-    # The old banner colored this profile's title bars and saved nothing; uninstall switches that off (issue #19).
+    $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) "$Label sign-in notice still cleared by uninstall"
+    # The old banner colored this profile's title bars; uninstall puts the user's own setting back (issue #19).
     $dwm = Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\DWM' -ErrorAction SilentlyContinue
     Assert ($dwm.ColorPrevalence -ne 1) "$Label classification accent removed from title bars by uninstall"
 }
 if ($Beta1Exe) { Test-UpgradeFrom $Beta1Exe 'beta.1' }
 if ($PreviousExe) { Test-UpgradeFrom $PreviousExe '1.1.0' }
+if ($ServiceExe) { Test-UpgradeFrom $ServiceExe '1.2.0' }
 
 # Double-clicking the downloaded exe opens the setup window (and stays open until closed).
 $setup = Start-Process -FilePath $Exe -PassThru
@@ -75,23 +83,23 @@ Stop-Process -Id $setup.Id
 
 # A first install must say which classification; it never silently becomes UNCLASSIFIED.
 Invoke-Banner @('install', '--no-start') -ExpectedExitCode 2
-Assert (-not (Test-Path "$installDir\BetterBanner.exe")) 'install without --level is refused'
+Assert (-not (Test-Path "$installDir\ClassBanner.exe")) 'install without --level is refused'
 Invoke-Banner @('install', '--level', 'SECRET', '--caption', 'SECRET//NOFORN', '--logon-title', 'Notice',
                 '--logon-text', 'Authorized use only', '--set', 'ClockEnabled=1', '--no-start')
 
-Assert (Test-Path "$installDir\BetterBanner.exe") 'exe installed'
-Assert (Test-Path "$installDir\BetterBanner.scr") 'screen saver installed'
-$service = Get-Service BetterBanner -ErrorAction SilentlyContinue
+Assert (Test-Path "$installDir\ClassBanner.exe") 'exe installed'
+Assert (Test-Path "$installDir\ClassBanner.scr") 'screen saver installed'
+$service = Get-Service ClassBanner -ErrorAction SilentlyContinue
 Assert ($service -and $service.StartType -eq 'Automatic' -and $service.Status -eq 'Stopped') 'service registered (automatic, not started with --no-start)'
-Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').BetterBanner) 'no Run key'
-$uninstall = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\BetterBanner'
+Assert ($null -eq (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').ClassBanner) 'no Run key'
+$uninstall = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ClassBanner'
 Assert ($uninstall.Publisher -eq 'Austin Case') 'listed in Apps & features with publisher'
 $cpl = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}'
 Assert (Test-Path $cpl) 'registered in Control Panel'
-$shortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Better Banner.lnk'
+$shortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\ClassBanner.lnk'
 Assert (Test-Path $shortcut) 'Start menu entry created'
 $cplCommand = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\CLSID\{7B3E2C5A-9D41-4F6B-8E2A-5C1D0B9F4A21}\Shell\Open\Command').'(default)'
-Assert ($cplCommand -like '*BetterBanner.exe" settings') 'Control Panel opens the settings window'
+Assert ($cplCommand -like '*ClassBanner.exe" settings') 'Control Panel opens the settings window'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ($notice.legalnoticetext -eq 'Authorized use only') 'sign-in notice set'
 $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
@@ -137,7 +145,7 @@ Assert ($notice.legalnoticetext -eq '-- Authorized use only --') 'notice kept wh
 Set-Content $settingsFile $good
 
 # Settings window opens and stays up until closed.
-$settingsWindow = Start-Process -FilePath "$installDir\BetterBanner.exe" -ArgumentList 'settings' -PassThru
+$settingsWindow = Start-Process -FilePath "$installDir\ClassBanner.exe" -ArgumentList 'settings' -PassThru
 Start-Sleep -Seconds 3
 if ($settingsWindow.HasExited) { Write-Host "settings exited with code $($settingsWindow.ExitCode)" }
 Assert (-not $settingsWindow.HasExited) 'settings window opens'
@@ -157,9 +165,9 @@ function Wait-SessionBanner([int] $ExceptId = 0, [int] $Seconds = 20) {
 }
 
 # Issue #17: the service starts the banner in every signed-in session and restarts it when it's ended.
-Start-Service BetterBanner
+Start-Service ClassBanner
 Start-Sleep -Seconds 3
-Assert ((Get-Service BetterBanner).Status -eq 'Running') 'service running'
+Assert ((Get-Service ClassBanner).Status -eq 'Running') 'service running'
 $signedIn = $mySession -ne 0
 if (-not $signedIn) {
     Write-Host "note - this runner has no signed-in session (session 0); banner restart checks skipped"
@@ -172,17 +180,17 @@ if (-not $signedIn) {
     Stop-Process -Id $banner.Id -Force
     $restarted = Wait-SessionBanner -ExceptId $banner.Id
     Assert ($restarted.Count -eq 1 -and $restarted[0].Id -ne $banner.Id) 'ended banner restarted within seconds'
-    $event = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Better Banner'; Id = 1001; StartTime = $started } -MaxEvents 1 -ErrorAction SilentlyContinue
+    $event = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'ClassBanner'; Id = 1001; StartTime = $started } -MaxEvents 1 -ErrorAction SilentlyContinue
     Assert ($event -and $event.Message -like "*session $mySession*restarted*") 'unexpected exit and restart in the Application log'
     Write-Host "event: $($event.Message)"
 
-    $second = Start-Process -FilePath "$installDir\BetterBanner.exe" -ArgumentList 'banner' -PassThru
+    $second = Start-Process -FilePath "$installDir\ClassBanner.exe" -ArgumentList 'banner' -PassThru
     Assert ($second.WaitForExit(5000)) 'second instance exits (single instance per session)'
 
     # Upgrading in place: the service and its banners are stopped, the exe replaced, and new banners started.
     # The banner saved this profile's own values before coloring the title bars (issue #19).
     Assert ((Get-ItemProperty $dwmKey).ColorPrevalence -eq 1) 'title bars colored'
-    Assert (Test-Path 'HKCU:\Software\BetterBanner\Saved') "user's own values saved"
+    Assert (Test-Path 'HKCU:\Software\ClassBanner\Saved') "user's own values saved"
 
     Invoke-Banner @('install', '--quiet')
     $upgraded = Wait-SessionBanner -ExceptId $restarted[0].Id
@@ -196,10 +204,10 @@ Start-Sleep -Seconds 1
 Assert (-not (Test-Path $installDir)) 'install folder and settings removed'
 $notice = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
 Assert ([string]::IsNullOrEmpty($notice.legalnoticetext)) 'sign-in notice cleared'
-Assert ($null -eq (Get-Service BetterBanner -ErrorAction SilentlyContinue)) 'service removed'
+Assert ($null -eq (Get-Service ClassBanner -ErrorAction SilentlyContinue)) 'service removed'
 if ($signedIn) {
     Assert ((Get-ItemProperty $dwmKey).ColorPrevalence -eq 0) "uninstall restored the user's own title bar setting"
-    Assert (-not (Test-Path 'HKCU:\Software\BetterBanner\Saved')) 'saved values removed'
+    Assert (-not (Test-Path 'HKCU:\Software\ClassBanner\Saved')) 'saved values removed'
 }
 Assert ((Get-Banners).Count -eq 0) 'no banners left running'
 Assert (-not (Test-Path $cpl)) 'removed from Control Panel'
