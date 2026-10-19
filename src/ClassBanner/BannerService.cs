@@ -217,6 +217,9 @@ internal static unsafe class BannerService
             if (slot.Thread == 0) return;
             if (WaitForSingleObject(slot.Thread, 0) == WAIT_OBJECT_0)
             {
+                // A banner that is ending (killed, crashed or closed) loses its window thread a moment before the
+                // process itself ends: that is an ordinary exit, handled (and logged as 1001) by OnExited.
+                if (WaitForSingleObject(slot.Process, 1000) == WAIT_OBJECT_0) return;
                 TerminateProcess(slot.Process, BannerHealthExitCode);
                 WaitForSingleObject(slot.Process, 2000);
                 slot.HealthProblem = "its window thread had ended";
