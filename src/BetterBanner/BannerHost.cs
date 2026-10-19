@@ -181,7 +181,7 @@ internal sealed unsafe class BannerHost : Win32Window
 
     private void Reconcile()
     {
-        var desired = BannerLayout.ComputeSlots(Monitors.GetAll(), Settings.Position, Settings.FontSize);
+        var desired = BannerLayout.ComputeSlots(Monitors.GetAll(), Settings.Position, Settings.FontSize, Settings.BannerThickness);
         var existing = _banners.Select(b => new ExistingBanner(b.Id, b.Slot, b.ActualRect)).ToList();
         var plan = BannerLayout.Reconcile(desired, existing);
 
@@ -210,7 +210,7 @@ internal sealed unsafe class BannerHost : Win32Window
     private void Rebuild(string reason)
     {
         Log.Info($"Rebuilding banners: {reason}.");
-        Rebuild(BannerLayout.ComputeSlots(Monitors.GetAll(), Settings.Position, Settings.FontSize));
+        Rebuild(BannerLayout.ComputeSlots(Monitors.GetAll(), Settings.Position, Settings.FontSize, Settings.BannerThickness));
     }
 
     private void Rebuild(IReadOnlyList<BannerSlot> slots)

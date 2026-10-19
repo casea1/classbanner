@@ -35,6 +35,8 @@ Use "Banner text" to add caveats such as //NOFORN. Group Policy overrides the ma
       <string id="Position_Top">Top only</string>
       <string id="Position_Bottom">Bottom only</string>
 
+      <string id="BannerThickness">Banner thickness</string>
+      <string id="BannerThickness_Help">Height of each banner in pixels at 100% display scaling (12-120), scaled for each monitor's display scaling. 0 (the default) sizes the banner to fit the text. In a thin banner the text is made smaller to fit.</string>
       <string id="FontSize">Text size</string>
       <string id="FontSize_Help">Banner text size in points (8-36, default 10). The banner is automatically scaled for each monitor's display scaling (100%, 125%, 150%, 200%...).</string>
 
@@ -91,6 +93,9 @@ Domain alternative: enable "Force specific screen saver" (User Configuration > A
       </presentation>
       <presentation id="Position">
         <dropdownList refId="Position" defaultItem="0" noSort="true">Position:</dropdownList>
+      </presentation>
+      <presentation id="BannerThickness">
+        <decimalTextBox refId="BannerThickness" defaultValue="0">Thickness (pixels, 0 = automatic):</decimalTextBox>
       </presentation>
       <presentation id="FontSize">
         <decimalTextBox refId="FontSize" defaultValue="10">Text size (points):</decimalTextBox>

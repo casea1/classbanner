@@ -57,22 +57,33 @@ public static class BannerLayout
     /// <summary>Text height in pixels for a point size at a DPI (96 DPI = 100% scaling).</summary>
     public static int FontPixels(int points, int dpi) => (int)Math.Round(points * dpi / 72.0);
 
-    /// <summary>Banner thickness: the text plus padding, scaled for the monitor's DPI so it looks the same at any zoom.</summary>
-    public static int BannerHeight(int fontPoints, int dpi)
+    public const int MinThickness = 12;
+    public const int MaxThickness = 120;
+
+    /// <summary>
+    /// Banner thickness, scaled for the monitor's DPI so it looks the same at any zoom. <paramref name="thickness"/> is
+    /// pixels at 100% scaling; 0 means automatic: the text plus padding.
+    /// </summary>
+    public static int BannerHeight(int fontPoints, int dpi, int thickness = 0)
     {
         dpi = dpi <= 0 ? BaseDpi : dpi;
+        if (thickness > 0) return (int)Math.Round(Math.Clamp(thickness, MinThickness, MaxThickness) * dpi / (double)BaseDpi);
         var text = FontPixels(fontPoints, dpi);
         var padding = (int)Math.Round(4 * dpi / (double)BaseDpi);
         return text + 2 * padding + (text / 4);
     }
 
+    /// <summary>Text height for a banner of <paramref name="bannerHeight"/> pixels: the chosen size, shrunk to fit a thin banner.</summary>
+    public static int TextPixels(int fontPoints, int dpi, int bannerHeight) =>
+        Math.Max(6, Math.Min(FontPixels(fontPoints, dpi <= 0 ? BaseDpi : dpi), (int)(bannerHeight * 0.75)));
+
     /// <summary>One slot per requested edge per monitor, in a stable order.</summary>
-    public static IReadOnlyList<BannerSlot> ComputeSlots(IReadOnlyList<MonitorInfo> monitors, BannerPosition position, int fontPoints)
+    public static IReadOnlyList<BannerSlot> ComputeSlots(IReadOnlyList<MonitorInfo> monitors, BannerPosition position, int fontPoints, int thickness = 0)
     {
         var slots = new List<BannerSlot>();
         foreach (var m in monitors.OrderBy(m => m.DeviceName, StringComparer.OrdinalIgnoreCase))
         {
-            var height = BannerHeight(fontPoints, m.Dpi);
+            var height = BannerHeight(fontPoints, m.Dpi, thickness);
             if (position is BannerPosition.Top or BannerPosition.Both)
                 slots.Add(new BannerSlot(m.DeviceName, BannerEdge.Top, m.Bounds, m.Dpi, height));
             if (position is BannerPosition.Bottom or BannerPosition.Both)

@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `BannerThickness`: set the banner height in pixels at 100% scaling (12-120), in the settings window, on the
+  command line (`--set BannerThickness=40`) or by Group Policy. It scales with each monitor's display scaling; 0 (the
+  default) keeps the automatic height. Text is made smaller to fit a thin banner.
+
 ## [1.2.0] - 2026-10-18
 
 ### Added

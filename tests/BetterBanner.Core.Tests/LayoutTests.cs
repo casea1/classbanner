@@ -30,6 +30,42 @@ public class LayoutTests
         Assert.Equal(edge, slots[0].Edge);
     }
 
+    [Theory]
+    [InlineData(40, 96, 40)]
+    [InlineData(40, 144, 60)]
+    [InlineData(40, 192, 80)]
+    [InlineData(12, 96, 12)]
+    public void Custom_thickness_is_pixels_at_100_percent_scaled_per_monitor(int thickness, int dpi, int expected)
+    {
+        Assert.Equal(expected, BannerLayout.BannerHeight(10, dpi, thickness));
+        Assert.All(BannerLayout.ComputeSlots([Primary with { Dpi = dpi }], BannerPosition.Both, 10, thickness), s => Assert.Equal(expected, s.Height));
+    }
+
+    [Fact]
+    public void Zero_thickness_is_automatic()
+    {
+        Assert.Equal(BannerLayout.BannerHeight(10, 96), BannerLayout.BannerHeight(10, 96, 0));
+    }
+
+    [Fact]
+    public void Text_shrinks_to_fit_a_thin_banner_but_never_grows()
+    {
+        Assert.Equal(BannerLayout.FontPixels(10, 96), BannerLayout.TextPixels(10, 96, 80));
+        Assert.True(BannerLayout.TextPixels(24, 96, 16) <= 12);
+    }
+
+    [Theory]
+    [InlineData("0", true)]
+    [InlineData("12", true)]
+    [InlineData("120", true)]
+    [InlineData("11", false)]
+    [InlineData("121", false)]
+    [InlineData("thick", false)]
+    public void Thickness_setting_is_range_checked(string value, bool valid)
+    {
+        Assert.Equal(valid, SettingKeys.TryApply(new BannerSettings(), "BannerThickness", value));
+    }
+
     [Fact]
     public void Height_scales_with_dpi_so_banner_looks_the_same_at_any_zoom()
     {

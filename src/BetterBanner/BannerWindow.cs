@@ -30,7 +30,7 @@ internal sealed unsafe class BannerWindow : Win32Window
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED, WS_POPUP,
             strip.Left, strip.Top, strip.Width, strip.Height);
 
-        _font = CreateFontW(-BannerLayout.FontPixels(settings.FontSize, slot.Dpi), 0, 0, 0, FW_BOLD, 0, 0, 0, 1, 0, 0,
+        _font = CreateFontW(-BannerLayout.TextPixels(settings.FontSize, slot.Dpi, slot.Height), 0, 0, 0, FW_BOLD, 0, 0, 0, 1, 0, 0,
             CLEARTYPE_QUALITY, 0, "Segoe UI");
         _brush = CreateSolidBrush(ToColorRef(settings.EffectiveBackColor));
         SetAlpha(255);
@@ -193,7 +193,7 @@ internal sealed unsafe class BannerWindow : Win32Window
             if (placement.Scale < 1)
             {
                 // Too wide even without the clock (very long marking on a narrow screen): shrink rather than truncate.
-                var pixels = Math.Max(6, (int)(BannerLayout.FontPixels(_settings.FontSize, Slot.Dpi) * placement.Scale));
+                var pixels = Math.Max(6, (int)(BannerLayout.TextPixels(_settings.FontSize, Slot.Dpi, Slot.Height) * placement.Scale));
                 var small = CreateFontW(-pixels, 0, 0, 0, FW_BOLD, 0, 0, 0, 1, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
                 var previous = SelectObject(hdc, small);
                 DrawTextW(hdc, caption, -1, ref captionRect, DT_CENTER | DT_VCENTER | flags);

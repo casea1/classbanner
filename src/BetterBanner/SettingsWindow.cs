@@ -43,6 +43,7 @@ internal sealed class SettingsWindow : Win32Window
     private int _dpi = BannerLayout.BaseDpi;
     private RECT _previewRect;
 
+    private nint _thickness;
     private nint _level, _caption, _position, _fontSize, _clock, _zulu, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
     private nint _status, _save, _cancel, _policyNote;
 
@@ -104,6 +105,7 @@ internal sealed class SettingsWindow : Win32Window
         SendMessageString(_caption, EM_SETCUEBANNER, 1, "Standard marking (e.g. add //NOFORN)");
         _position = AddRow("Position:", Combo(Positions.Select(p => p.Name)), nameof(BannerSettings.Position));
         _fontSize = AddRow("Text size (8-36):", Edit(ES_NUMBER), nameof(BannerSettings.FontSize));
+        _thickness = AddRow("Thickness (0 = auto):", Edit(ES_NUMBER), nameof(BannerSettings.BannerThickness));
 
         _clock = Check("Show clock");
         _zulu = Check("Zulu (UTC) time");
@@ -171,6 +173,7 @@ internal sealed class SettingsWindow : Win32Window
         SetWindowTextW(_caption, s.Caption ?? "");
         SendMessage(_position, CB_SETCURSEL, Array.FindIndex(Positions, p => p.Position == s.Position), 0);
         SetWindowTextW(_fontSize, s.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        SetWindowTextW(_thickness, s.BannerThickness.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SetCheck(_clock, s.ClockEnabled);
         SetCheck(_zulu, s.ClockUseZulu);
         SetCheck(_colors, s.EnforceColors);
@@ -355,6 +358,8 @@ internal sealed class SettingsWindow : Win32Window
         if (position >= 0) Add(nameof(BannerSettings.Position), Positions[position].Position.ToString());
         var fontSize = GetWindowText(_fontSize).Trim();
         if (int.TryParse(fontSize, out var size) && size is >= 8 and <= 36) Add(nameof(BannerSettings.FontSize), fontSize);
+        var thickness = GetWindowText(_thickness).Trim();
+        if (IsValidThickness(thickness)) Add(nameof(BannerSettings.BannerThickness), thickness);
         Add(nameof(BannerSettings.ClockEnabled), IsChecked(_clock) ? "1" : "0");
         Add(nameof(BannerSettings.ClockUseZulu), IsChecked(_zulu) ? "1" : "0");
         Add(nameof(BannerSettings.EnforceColors), IsChecked(_colors) ? "1" : "0");
@@ -382,6 +387,11 @@ internal sealed class SettingsWindow : Win32Window
         if (!int.TryParse(fontSize, out var size) || size is < 8 or > 36)
         {
             ShowProblem("Text size must be between 8 and 36.");
+            return;
+        }
+        if (!IsValidThickness(GetWindowText(_thickness).Trim()))
+        {
+            ShowProblem($"Thickness must be 0 (automatic) or between {BannerLayout.MinThickness} and {BannerLayout.MaxThickness} pixels.");
             return;
         }
         if ((int)SendMessage(_level, CB_GETCURSEL, 0, 0) < 0 && !_policyKeys.Contains(nameof(BannerSettings.Level)))
@@ -477,6 +487,9 @@ internal sealed class SettingsWindow : Win32Window
         Lock(control, key);
         return control;
     }
+
+    private static bool IsValidThickness(string text) =>
+        int.TryParse(text, out var value) && (value == 0 || value is >= BannerLayout.MinThickness and <= BannerLayout.MaxThickness);
 
     private void Lock(nint control, string key)
     {

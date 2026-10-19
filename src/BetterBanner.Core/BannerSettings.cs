@@ -47,6 +47,9 @@ public sealed class BannerSettings
     /// <summary>Banner text size in points (8-36). Scaled for each monitor's DPI.</summary>
     public int FontSize { get; set; } = 10;
 
+    /// <summary>Banner thickness in pixels at 100% scaling (12-120), scaled for each monitor. 0 = automatic (fits the text).</summary>
+    public int BannerThickness { get; set; }
+
     /// <summary>How see-through the banner gets while the mouse is over it, in percent (0-90).</summary>
     public int HoverTransparency { get; set; } = 40;
 
@@ -122,6 +125,7 @@ public sealed class BannerSettings
         if (!Enum.IsDefined(WallpaperMode)) WallpaperMode = WallpaperMode.Off;
         // Values are range-checked when applied; this is a last line of defence for code that sets them directly.
         FontSize = Math.Clamp(FontSize, 8, 36);
+        if (BannerThickness != 0) BannerThickness = Math.Clamp(BannerThickness, BannerLayout.MinThickness, BannerLayout.MaxThickness);
         HoverTransparency = Math.Clamp(HoverTransparency, 0, 90);
         ScreenSaverTimeoutSeconds = Math.Clamp(ScreenSaverTimeoutSeconds, 60, 7200);
         if (!BannerText.IsValidClockFormat(ClockFormat)) ClockFormat = BannerText.DefaultClockFormat;

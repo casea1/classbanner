@@ -84,6 +84,15 @@
       </elements>
     </policy>
 
+    <policy name="BannerThickness" class="Machine" displayName="$(string.BannerThickness)" explainText="$(string.BannerThickness_Help)"
+            presentation="$(presentation.BannerThickness)" key="SOFTWARE\Policies\BetterBanner">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_BetterBanner1" />
+      <elements>
+        <decimal id="BannerThickness" valueName="BannerThickness" minValue="0" maxValue="120" required="true" />
+      </elements>
+    </policy>
+
     <policy name="HoverTransparency" class="Machine" displayName="$(string.HoverTransparency)" explainText="$(string.HoverTransparency_Help)"
             presentation="$(presentation.HoverTransparency)" key="SOFTWARE\Policies\BetterBanner">
       <parentCategory ref="Appearance" />

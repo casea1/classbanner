@@ -17,6 +17,8 @@ public static class SettingKeys
             [nameof(BannerSettings.ForeColor)] = (s, v) => TryColor(v, out var c) && Set(() => s.ForeColor = c),
             [nameof(BannerSettings.Position)] = (s, v) => TryEnum<BannerPosition>(v, out var p) && Set(() => s.Position = p),
             [nameof(BannerSettings.FontSize)] = (s, v) => TryInt(v, 8, 36, out var i) && Set(() => s.FontSize = i),
+            [nameof(BannerSettings.BannerThickness)] = (s, v) =>
+                TryInt(v, 0, BannerLayout.MaxThickness, out var i) && (i == 0 || i >= BannerLayout.MinThickness) && Set(() => s.BannerThickness = i),
             [nameof(BannerSettings.HoverTransparency)] = (s, v) => TryInt(v, 0, 90, out var i) && Set(() => s.HoverTransparency = i),
             [nameof(BannerSettings.StayAboveFullScreenApps)] = (s, v) => TryBool(v, out var b) && Set(() => s.StayAboveFullScreenApps = b),
             [nameof(BannerSettings.AllowUserExit)] = (s, v) => TryBool(v, out var b) && Set(() => s.AllowUserExit = b),
