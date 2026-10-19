@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-19
+
 ### Added
 - **Show user name** (`ShowUserName`, off by default): the signed-in user's account name on the left of every
   banner. Set it in Group Policy (*Appearance > Show user name*, new in the 1.4 templates), the settings window or
