@@ -340,6 +340,18 @@ internal sealed unsafe class BannerHost : Win32Window
         foreach (var banner in _banners) banner.Redraw();
     }
 
+    /// <summary>True while the banner's right-click menu, About box or another of its own windows is in front.</summary>
+    public bool OwnUiInFront()
+    {
+        if (_menuOpen) return true;
+        var front = GetForegroundWindow();
+        if (front == 0) return false;
+        GetWindowThreadProcessId(front, out var pid);
+        return pid == (uint)Environment.ProcessId && _banners.All(b => b.Handle != front);
+    }
+
+    private bool _menuOpen;
+
     public void ShowMenu(int x, int y)
     {
         var menu = CreatePopupMenu();
@@ -357,7 +369,10 @@ internal sealed unsafe class BannerHost : Win32Window
 
             // Required so the menu closes when the user clicks elsewhere.
             SetForegroundWindow(Handle);
-            var command = (uint)TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, x, y, 0, Handle, 0);
+            uint command;
+            _menuOpen = true;
+            try { command = (uint)TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, x, y, 0, Handle, 0); }
+            finally { _menuOpen = false; }
             PostMessageW(Handle, 0 /* WM_NULL */, 0, 0);
 
             switch (command)

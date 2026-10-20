@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The settings and setup window could open partly under a banner, depending on the monitor and display scaling. At
+  high scaling on a shorter screen it was taller than the space between the banners, so its top or its buttons ended
+  up underneath them. It now always opens inside the space the banners leave free, on the monitor it opens on (also
+  after moving to a monitor with different scaling), and is drawn smaller when it would not otherwise fit.
+- The banner's right-click menu and About box could disappear behind the banner a moment after opening. The banner's
+  regular "stay on top" check raised it over them; it now leaves them in front while they are open.
+
 ## [1.5.1] - 2026-10-19
 
 ### Fixed

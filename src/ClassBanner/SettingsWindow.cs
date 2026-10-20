@@ -42,6 +42,7 @@ internal sealed class SettingsWindow : Win32Window
     private nint _previewBrush;
     private int _dpi = BannerLayout.BaseDpi;
     private RECT _previewRect;
+    private double _scale = 1;
 
     private nint _thickness;
     private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _aboveFullScreen, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
@@ -72,7 +73,7 @@ internal sealed class SettingsWindow : Win32Window
         // Group Policy can change while the window is open (issue #19); also checked on a policy broadcast and on Save.
         SetTimer(Handle, TimerPolicy, PolicyCheckMs, 0);
 
-        // Center on the monitor under the mouse.
+        // Center on the monitor under the mouse, then make sure all of it is inside that monitor's work area.
         GetCursorPos(out var cursor);
         var monitor = Monitors.GetAll().FirstOrDefault(m => m.Bounds.Contains(cursor.X, cursor.Y)) ?? Monitors.GetAll().FirstOrDefault();
         GetWindowRect(Handle, out var r);
@@ -83,6 +84,7 @@ internal sealed class SettingsWindow : Win32Window
             SetWindowPos(Handle, 0, monitor.WorkArea.Left + (monitor.WorkArea.Width - w) / 2,
                 monitor.WorkArea.Top + (monitor.WorkArea.Height - h) / 2, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
         }
+        FitToMonitor();
         ShowWindow(Handle, SW_SHOWNORMAL);
         SetForegroundWindow(Handle);
     }
@@ -187,10 +189,45 @@ internal sealed class SettingsWindow : Win32Window
         SetWindowTextW(_noticeText, (s.LogonNoticeText ?? "").ReplaceLineEndings("\r\n"));
     }
 
+    /// <summary>
+    /// Lays the window out for its monitor and moves it fully inside that monitor's work area. The banners are app
+    /// bars outside the work area, so a window inside it is never under a banner. At high display scaling on a short
+    /// screen the window is laid out smaller rather than running under the top banner and the bottom one.
+    /// </summary>
+    private void FitToMonitor()
+    {
+        _scale = 1;
+        Layout();
+        if (CurrentMonitor() is not { } monitor) return;
+
+        // The title bar doesn't shrink with the contents, so a second pass may be needed to fit exactly.
+        GetWindowRect(Handle, out var r);
+        for (var pass = 0; pass < 3; pass++)
+        {
+            var scale = WindowFit.ScaleToFit(r.Bottom - r.Top, monitor.WorkArea.Height);
+            if (scale >= 1 || _scale <= WindowFit.MinScale) break;
+            _scale = Math.Max(WindowFit.MinScale, _scale * scale);
+            Layout();
+            GetWindowRect(Handle, out r);
+        }
+
+        var placed = WindowFit.MoveInside(r.ToScreenRect(), monitor.WorkArea);
+        if (placed.Left != r.Left || placed.Top != r.Top)
+            SetWindowPos(Handle, 0, placed.Left, placed.Top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    private MonitorInfo? CurrentMonitor()
+    {
+        GetWindowRect(Handle, out var r);
+        int x = (r.Left + r.Right) / 2, y = (r.Top + r.Bottom) / 2;
+        var monitors = Monitors.GetAll();
+        return monitors.FirstOrDefault(m => m.Bounds.Contains(x, y)) ?? monitors.FirstOrDefault(m => m.IsPrimary);
+    }
+
     /// <summary>Positions every control for the current DPI and sizes the window to fit.</summary>
     private void Layout()
     {
-        int S(int px) => (int)Math.Round(px * _dpi / (double)BannerLayout.BaseDpi);
+        int S(int px) => (int)Math.Round(px * _dpi * _scale / BannerLayout.BaseDpi);
 
         if (_font != 0) DeleteObject(_font);
         _font = CreateFontW(-S(12), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
@@ -278,7 +315,7 @@ internal sealed class SettingsWindow : Win32Window
                     var suggested = (RECT*)lParam;
                     SetWindowPos(Handle, 0, suggested->Left, suggested->Top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
                 }
-                Layout();
+                FitToMonitor();
                 return 0;
 
             case WM_SAVE_DONE:
