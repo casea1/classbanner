@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-10-20
+
 ### Fixed
 - The settings and setup window could open partly under a banner, depending on the monitor and display scaling. At
   high scaling on a shorter screen it was taller than the space between the banners, so its top or its buttons ended
