@@ -83,8 +83,12 @@ internal sealed unsafe class BannerWindow : Win32Window
         return true;
     }
 
-    public void KeepOnTop() =>
+    public void KeepOnTop()
+    {
+        // While the banner's own menu or About box is open, raising the banner would put it over them.
+        if (_host.OwnUiInFront()) return;
         SetWindowPos(Handle, ZOrderTarget(), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
 
     /// <summary>
     /// Topmost, unless <see cref="BannerSettings.StayAboveFullScreenApps"/> is off and a full-screen app (full-screen

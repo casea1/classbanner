@@ -433,3 +433,45 @@ public class FullScreenTests
     [Fact]
     public void Off_by_default() => Assert.False(new BannerSettings().StayAboveFullScreenApps);
 }
+
+public class WindowFitTests
+{
+    // 1920x1080 at 100%: banners 15 px top and bottom, taskbar 48 px.
+    private static readonly ScreenRect Work = new(0, 15, 1920, 1080 - 15 - 48);
+
+    [Fact]
+    public void Window_that_fits_is_not_shrunk() => Assert.Equal(1, WindowFit.ScaleToFit(700, Work.Height));
+
+    [Fact]
+    public void Too_tall_window_is_shrunk_to_the_work_area() =>
+        Assert.Equal(Work.Height / 1300.0, WindowFit.ScaleToFit(1300, Work.Height), 6);
+
+    [Fact]
+    public void Never_shrunk_below_half() => Assert.Equal(WindowFit.MinScale, WindowFit.ScaleToFit(5000, Work.Height));
+
+    [Fact]
+    public void Window_above_the_work_area_is_moved_below_the_top_banner()
+    {
+        var placed = WindowFit.MoveInside(new ScreenRect(600, -40, 1300, 900), Work);
+        Assert.Equal(new ScreenRect(600, 15, 1300, 955), placed);
+    }
+
+    [Fact]
+    public void Window_below_the_work_area_is_moved_above_the_bottom_banner()
+    {
+        var placed = WindowFit.MoveInside(new ScreenRect(600, 400, 1300, 1100), Work);
+        Assert.Equal(Work.Bottom, placed.Bottom);
+        Assert.Equal(700, placed.Height);
+    }
+
+    [Fact]
+    public void Window_taller_than_the_work_area_keeps_its_title_bar_visible() =>
+        Assert.Equal(Work.Top, WindowFit.MoveInside(new ScreenRect(0, -100, 700, 1200), Work).Top);
+
+    [Fact]
+    public void Window_inside_is_left_alone()
+    {
+        var r = new ScreenRect(600, 200, 1300, 800);
+        Assert.Equal(r, WindowFit.MoveInside(r, Work));
+    }
+}
