@@ -2,6 +2,20 @@ using System.Text.Json.Serialization;
 
 namespace ClassBanner.Core;
 
+/// <summary>
+/// Where an item (clock, user name, computer name) goes: one side of every banner, or one corner. A corner on a banner
+/// that isn't shown (e.g. bottom left with top-only banners) falls back to the same side of the banner that is.
+/// </summary>
+public enum InfoPosition
+{
+    TopLeft = 1,
+    TopRight = 2,
+    BottomLeft = 3,
+    BottomRight = 4,
+    Left = 5,
+    Right = 6,
+}
+
 public enum BannerPosition
 {
     Top = 1,
@@ -64,10 +78,19 @@ public sealed class BannerSettings
     /// <summary>Show "Exit" on the banner menu.</summary>
     public bool AllowUserExit { get; set; }
 
-    /// <summary>Show the signed-in user's name on the left of the banner.</summary>
+    /// <summary>Show the signed-in user's name.</summary>
     public bool ShowUserName { get; set; }
 
+    public InfoPosition UserNamePosition { get; set; } = InfoPosition.Left;
+
+    /// <summary>Show the computer's name (hostname).</summary>
+    public bool ShowComputerName { get; set; }
+
+    public InfoPosition ComputerNamePosition { get; set; } = InfoPosition.Left;
+
     public bool ClockEnabled { get; set; }
+
+    public InfoPosition ClockPosition { get; set; } = InfoPosition.Right;
 
     /// <summary>.NET custom date/time format. %TZI% becomes "Z" (Zulu) or "L" (local).</summary>
     public string ClockFormat { get; set; } = BannerText.DefaultClockFormat;

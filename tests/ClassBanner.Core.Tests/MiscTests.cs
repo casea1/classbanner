@@ -300,7 +300,7 @@ public class CaptionLayoutTests
     public void Moved_left_when_centering_would_hit_the_clock()
     {
         var p = CaptionLayout.Place(1024, 600, 0, 300, 8);
-        Assert.True(p.ShowClock);
+        Assert.True(p.ShowRight);
         Assert.Equal(1, p.Scale);
         Assert.Equal(8, p.Left);
         Assert.True(p.Right - p.Left >= 600);
@@ -311,7 +311,7 @@ public class CaptionLayoutTests
     public void Clock_is_hidden_before_the_marking_is_shortened()
     {
         var p = CaptionLayout.Place(1024, 800, 0, 300, 8);
-        Assert.False(p.ShowClock);
+        Assert.False(p.ShowRight);
         Assert.Equal(1, p.Scale);
         Assert.Equal(new CaptionPlacement(0, 1024, false, false, 1), p);
     }
@@ -327,7 +327,7 @@ public class CaptionLayoutTests
     public void Marking_moves_right_of_a_long_user_name()
     {
         var p = CaptionLayout.Place(1024, 400, 350, 0, 8);
-        Assert.True(p.ShowUser);
+        Assert.True(p.ShowLeft);
         Assert.Equal(8 + 350 + 8, p.Left);
         Assert.True(p.Right - p.Left >= 400);
     }
@@ -336,8 +336,8 @@ public class CaptionLayoutTests
     public void Clock_gives_way_before_the_user_name()
     {
         var p = CaptionLayout.Place(1024, 500, 200, 300, 8);
-        Assert.True(p.ShowUser);
-        Assert.False(p.ShowClock);
+        Assert.True(p.ShowLeft);
+        Assert.False(p.ShowRight);
         Assert.Equal(1, p.Scale);
         Assert.Equal(new CaptionPlacement(0, 1024, true, false, 1), p); // still centered, clear of the name
     }
@@ -362,7 +362,7 @@ public class CaptionLayoutTests
     public void Marking_wider_than_the_screen_is_shrunk_not_truncated()
     {
         var p = CaptionLayout.Place(800, 1600, 0, 0, 8);
-        Assert.False(p.ShowClock);
+        Assert.False(p.ShowRight);
         Assert.InRange(p.Scale, 0.48, 0.5);
     }
 }
@@ -474,4 +474,67 @@ public class WindowFitTests
         var r = new ScreenRect(600, 200, 1300, 800);
         Assert.Equal(r, WindowFit.MoveInside(r, Work));
     }
+}
+
+public class BannerCornersTests
+{
+    private static (string Left, string Right) Top(BannerSettings s) => BannerCorners.For(s, BannerEdge.Top, "12:00L", "jsmith", "PC-01");
+    private static (string Left, string Right) Bottom(BannerSettings s) => BannerCorners.For(s, BannerEdge.Bottom, "12:00L", "jsmith", "PC-01");
+
+    [Fact]
+    public void Nothing_by_default() => Assert.Equal(("", ""), Top(new BannerSettings()));
+
+    [Fact]
+    public void Defaults_match_earlier_versions_clock_right_user_left()
+    {
+        var s = new BannerSettings { ClockEnabled = true, ShowUserName = true };
+        Assert.Equal(("jsmith", "12:00L"), Top(s));
+        Assert.Equal(("jsmith", "12:00L"), Bottom(s));
+    }
+
+    [Fact]
+    public void Each_item_in_its_own_corner()
+    {
+        var s = new BannerSettings
+        {
+            ClockEnabled = true, ClockPosition = InfoPosition.TopLeft,
+            ShowUserName = true, UserNamePosition = InfoPosition.TopRight,
+            ShowComputerName = true, ComputerNamePosition = InfoPosition.BottomLeft,
+        };
+        Assert.Equal(("12:00L", "jsmith"), Top(s));
+        Assert.Equal(("PC-01", ""), Bottom(s));
+    }
+
+    [Fact]
+    public void Items_sharing_a_corner_are_joined_in_a_fixed_order()
+    {
+        var s = new BannerSettings
+        {
+            ClockEnabled = true, ClockPosition = InfoPosition.Right,
+            ShowUserName = true, UserNamePosition = InfoPosition.Right,
+            ShowComputerName = true, ComputerNamePosition = InfoPosition.Right,
+        };
+        Assert.Equal("PC-01" + BannerCorners.Separator + "jsmith" + BannerCorners.Separator + "12:00L", Top(s).Right);
+    }
+
+    [Fact]
+    public void Corner_on_a_banner_that_is_not_shown_moves_to_the_one_that_is()
+    {
+        var s = new BannerSettings { Position = BannerPosition.Top, ShowComputerName = true, ComputerNamePosition = InfoPosition.BottomRight };
+        Assert.Equal(("", "PC-01"), Top(s));
+    }
+
+    [Theory]
+    [InlineData("TopLeft", InfoPosition.TopLeft)]
+    [InlineData("bottomright", InfoPosition.BottomRight)]
+    [InlineData("5", InfoPosition.Left)] // Group Policy stores the enum as a number
+    public void Position_settings_parse(string value, InfoPosition expected)
+    {
+        var s = new BannerSettings();
+        Assert.True(SettingKeys.TryApply(s, "ComputerNamePosition", value));
+        Assert.Equal(expected, s.ComputerNamePosition);
+    }
+
+    [Fact]
+    public void Unknown_position_is_rejected() => Assert.False(SettingKeys.TryApply(new BannerSettings(), "ClockPosition", "Middle"));
 }

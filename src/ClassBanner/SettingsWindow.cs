@@ -25,6 +25,18 @@ internal sealed class SettingsWindow : Win32Window
     private static readonly (BannerPosition Position, string Name)[] Positions =
         [(BannerPosition.Both, "Top and bottom"), (BannerPosition.Top, "Top only"), (BannerPosition.Bottom, "Bottom only")];
 
+    /// <summary>Choices for where the clock, user name and computer name go; null is off.</summary>
+    private static readonly (InfoPosition? Position, string Name)[] Corners =
+    [
+        (null, "Off"),
+        (InfoPosition.Left, "Left, every banner"),
+        (InfoPosition.Right, "Right, every banner"),
+        (InfoPosition.TopLeft, "Top left"),
+        (InfoPosition.TopRight, "Top right"),
+        (InfoPosition.BottomLeft, "Bottom left"),
+        (InfoPosition.BottomRight, "Bottom right"),
+    ];
+
     private const uint WM_SAVE_DONE = WM_APP + 20;
     private const int SaveCancelled = -1223;
     private const int SaveFailedToStart = int.MinValue;
@@ -45,7 +57,7 @@ internal sealed class SettingsWindow : Win32Window
     private double _scale = 1;
 
     private nint _thickness;
-    private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _aboveFullScreen, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
+    private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _computerName, _aboveFullScreen, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
     private nint _status, _save, _cancel, _policyNote;
 
     /// <summary>A label + control (or a full-width control) laid out top to bottom.</summary>
@@ -109,12 +121,16 @@ internal sealed class SettingsWindow : Win32Window
         _fontSize = AddRow("Text size (8-36):", Edit(ES_NUMBER), nameof(BannerSettings.FontSize));
         _thickness = AddRow("Thickness (0 = auto):", Edit(ES_NUMBER), nameof(BannerSettings.BannerThickness));
 
-        _clock = Check("Show clock");
+        _clock = Combo(Corners.Select(c => c.Name));
         _zulu = Check("Zulu (UTC) time");
-        _rows.Add(new Row(0, _clock, Extra: _zulu));
+        _rows.Add(new Row(Static("Clock:"), _clock, Extra: _zulu));
         Lock(_clock, nameof(BannerSettings.ClockEnabled));
+        Lock(_clock, nameof(BannerSettings.ClockPosition));
         Lock(_zulu, nameof(BannerSettings.ClockUseZulu));
-        _userName = AddRow(null, Check("Show user name"), nameof(BannerSettings.ShowUserName));
+        _userName = AddRow("User name:", Combo(Corners.Select(c => c.Name)), nameof(BannerSettings.ShowUserName));
+        Lock(_userName, nameof(BannerSettings.UserNamePosition));
+        _computerName = AddRow("Computer name:", Combo(Corners.Select(c => c.Name)), nameof(BannerSettings.ShowComputerName));
+        Lock(_computerName, nameof(BannerSettings.ComputerNamePosition));
         _aboveFullScreen = AddRow(null, Check("Stay above full-screen apps (incl. Remote Desktop)"), nameof(BannerSettings.StayAboveFullScreenApps));
 
         _colors = AddRow(null, Check("Color title bars and highlights to match"), nameof(BannerSettings.EnforceColors));
@@ -157,7 +173,8 @@ internal sealed class SettingsWindow : Win32Window
         var shown = _initial.Clone();
         SettingKeys.ApplyAll(shown, edits.Where(e => !_policyKeys.Contains(e.Key)));
         LoadValues(shown);
-        foreach (var (control, key) in _locks) EnableWindow(control, !_policyKeys.Contains(key));
+        foreach (var group in _locks.GroupBy(l => l.Control))
+            EnableWindow(group.Key, !group.Any(l => _policyKeys.Contains(l.Key)));
         if (!_setup) SetWindowTextW(_policyNote, SettingsNote());
         InvalidatePreview();
         Log.Info("Group Policy changed while the settings window was open; refreshed it.");
@@ -178,9 +195,10 @@ internal sealed class SettingsWindow : Win32Window
         SendMessage(_position, CB_SETCURSEL, Array.FindIndex(Positions, p => p.Position == s.Position), 0);
         SetWindowTextW(_fontSize, s.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SetWindowTextW(_thickness, s.BannerThickness.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        SetCheck(_clock, s.ClockEnabled);
+        SetCorner(_clock, s.ClockEnabled, s.ClockPosition);
         SetCheck(_zulu, s.ClockUseZulu);
-        SetCheck(_userName, s.ShowUserName);
+        SetCorner(_userName, s.ShowUserName, s.UserNamePosition);
+        SetCorner(_computerName, s.ShowComputerName, s.ComputerNamePosition);
         SetCheck(_aboveFullScreen, s.StayAboveFullScreenApps);
         SetCheck(_colors, s.EnforceColors);
         SetCheck(_wallpaper, s.WallpaperMode != WallpaperMode.Off);
@@ -248,7 +266,7 @@ internal sealed class SettingsWindow : Win32Window
             var x = margin + labelWidth + gap;
             var width = row.Extra != 0 ? controlWidth / 2 : controlWidth;
             // Combo boxes need a tall rect for their drop-down list.
-            var isCombo = row.Control == _level || row.Control == _position;
+            var isCombo = _combos.Contains(row.Control);
             Place(row.Control, x, y, width, isCombo ? S(200) : height);
             if (row.Extra != 0) Place(row.Extra, x + width, y, controlWidth - width, height);
             y += height + gap;
@@ -404,9 +422,18 @@ internal sealed class SettingsWindow : Win32Window
         if (int.TryParse(fontSize, out var size) && size is >= 8 and <= 36) Add(nameof(BannerSettings.FontSize), fontSize);
         var thickness = GetWindowText(_thickness).Trim();
         if (IsValidThickness(thickness)) Add(nameof(BannerSettings.BannerThickness), thickness);
-        Add(nameof(BannerSettings.ClockEnabled), IsChecked(_clock) ? "1" : "0");
+        void AddCorner(nint combo, string enabledKey, string positionKey)
+        {
+            var index = (int)SendMessage(combo, CB_GETCURSEL, 0, 0);
+            if (index < 0) return;
+            Add(enabledKey, Corners[index].Position is null ? "0" : "1");
+            if (Corners[index].Position is { } corner) Add(positionKey, corner.ToString());
+        }
+
+        AddCorner(_clock, nameof(BannerSettings.ClockEnabled), nameof(BannerSettings.ClockPosition));
         Add(nameof(BannerSettings.ClockUseZulu), IsChecked(_zulu) ? "1" : "0");
-        Add(nameof(BannerSettings.ShowUserName), IsChecked(_userName) ? "1" : "0");
+        AddCorner(_userName, nameof(BannerSettings.ShowUserName), nameof(BannerSettings.UserNamePosition));
+        AddCorner(_computerName, nameof(BannerSettings.ShowComputerName), nameof(BannerSettings.ComputerNamePosition));
         Add(nameof(BannerSettings.StayAboveFullScreenApps), IsChecked(_aboveFullScreen) ? "1" : "0");
         Add(nameof(BannerSettings.EnforceColors), IsChecked(_colors) ? "1" : "0");
 
@@ -572,12 +599,19 @@ internal sealed class SettingsWindow : Win32Window
     private nint Combo(IEnumerable<string> items)
     {
         var combo = Child("COMBOBOX", null, WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL);
+        _combos.Add(combo);
         foreach (var item in items) SendMessageString(combo, CB_ADDSTRING, 0, item);
         return combo;
     }
 
     private static void Place(nint hwnd, int x, int y, int width, int height) =>
         SetWindowPos(hwnd, 0, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    private readonly HashSet<nint> _combos = [];
+
+    /// <summary>Selects the position of an item in its combo box, or "Off".</summary>
+    private static void SetCorner(nint combo, bool on, InfoPosition position) =>
+        SendMessage(combo, CB_SETCURSEL, on ? Array.FindIndex(Corners, c => c.Position == position) : 0, 0);
 
     private static void SetCheck(nint hwnd, bool value) => SendMessage(hwnd, BM_SETCHECK, value ? 1 : 0, 0);
 

@@ -21,7 +21,8 @@ display scaling. It replaces the USAF *Banner 3.1* (2003); see [docs/banner-3.1-
 - **In Control Panel.** *ClassBanner* appears in Control Panel (Appearance and Personalization, and System and
   Security) and in *Apps & features*. It opens a settings window with a live preview; settings enforced by Group
   Policy are shown locked.
-- **Optional extras:** signed-in user name, clock (local or Zulu), classification-colored title bars and highlights, wallpaper, and a
+- **Optional extras:** computer name, signed-in user name and clock (local or Zulu), each on either side of every
+  banner or in a corner of your choice, classification-colored title bars and highlights, wallpaper, and a
   classification screen saver.
 
 | Level | Banner | Text |
@@ -171,8 +172,12 @@ you deploy the ClassBanner templates; then remove the old ones. Earlier Applicat
 | `HoverTransparency` | `40` | Percent see-through while the mouse is over the banner (0-90) |
 | `StayAboveFullScreenApps` | `false` | Keep the banner over full-screen apps (presentations, video, full-screen Remote Desktop). Off: a full-screen app in front covers the banner on its monitor, so a remote session shows its own banner |
 | `AllowUserExit` | `false` | Adds *Exit* to the banner's menu; the banner then stays closed for that user until they sign in again |
-| `ShowUserName` | `false` | Show the signed-in user's account name on the left. It and the clock are hidden before the marking is ever shortened |
-| `ClockEnabled` | `false` | Show a clock on the right |
+| `ShowUserName` | `false` | Show the signed-in user's account name |
+| `UserNamePosition` | `Left` | Where: `Left` or `Right` (every banner), or one corner: `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`. A corner on a banner that isn't shown uses the same side of the one that is. Items sharing a place are shown in the order computer name, user name, clock. On a narrow banner the right text, then the left text, is hidden before the marking is ever shortened |
+| `ShowComputerName` | `false` | Show the computer name (hostname) |
+| `ComputerNamePosition` | `Left` | Where, as for `UserNamePosition` |
+| `ClockEnabled` | `false` | Show a clock |
+| `ClockPosition` | `Right` | Where, as for `UserNamePosition` |
 | `ClockFormat` | `ddd dd-MMM-yy HH:mm%TZI%` | [.NET date format](https://learn.microsoft.com/dotnet/standard/base-types/custom-date-and-time-format-strings); `%TZI%` becomes `Z` or `L` |
 | `ClockUseZulu` | `false` | Show UTC |
 | `ClockUppercase` | `false` | e.g. `071830Z OCT 26` with format `ddHHmm%TZI% MMM yy` |

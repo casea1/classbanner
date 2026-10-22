@@ -87,8 +87,9 @@ internal sealed unsafe class BannerHost : Win32Window
 
     public string ClockText { get; private set; } = "";
 
-    /// <summary>The signed-in user's name, or "" when <see cref="BannerSettings.ShowUserName"/> is off.</summary>
-    public string UserNameText => Settings.ShowUserName ? Environment.UserName : "";
+    /// <summary>The left and right text (computer name, user name, clock) for a banner on <paramref name="edge"/>.</summary>
+    public (string Left, string Right) SideTexts(BannerEdge edge) =>
+        BannerCorners.For(Settings, edge, ClockText, Environment.UserName, Environment.MachineName);
 
     /// <summary>True from an unlock or resume until the displays have been quiet for <see cref="SettleMs"/>.</summary>
     private bool _settling;

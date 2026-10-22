@@ -145,25 +145,25 @@ public static class BannerLayout
 }
 
 /// <summary>
-/// Where to draw the marking in a banner, whether the user name (left) and clock (right) fit, and how much to shrink
-/// the text.
+/// Where to draw the marking in a banner, whether the left text and the right text (user name, computer name, clock)
+/// fit, and how much to shrink the marking.
 /// </summary>
-public readonly record struct CaptionPlacement(int Left, int Right, bool ShowUser, bool ShowClock, double Scale);
+public readonly record struct CaptionPlacement(int Left, int Right, bool ShowLeft, bool ShowRight, double Scale);
 
 public static class CaptionLayout
 {
     /// <summary>
-    /// The marking is never cut off: the side items give way first, the clock before the user name. The marking is
-    /// centered when it fits between them; otherwise moved into the free space between them; otherwise a side item is
-    /// hidden; if the marking alone is still too wide, it is shrunk. Widths are in pixels; <paramref name="userWidth"/>
-    /// and <paramref name="clockWidth"/> are 0 when that item is off.
+    /// The marking is never cut off: the side texts give way first, the right one before the left one. The marking is
+    /// centered when it fits between them; otherwise moved into the free space between them; otherwise a side text is
+    /// hidden; if the marking alone is still too wide, it is shrunk. Widths are in pixels; <paramref name="leftWidth"/>
+    /// and <paramref name="rightWidth"/> are 0 when that side is empty.
     /// </summary>
-    public static CaptionPlacement Place(int bannerWidth, int captionWidth, int userWidth, int clockWidth, int pad)
+    public static CaptionPlacement Place(int bannerWidth, int captionWidth, int leftWidth, int rightWidth, int pad)
     {
-        foreach (var (user, clock) in new[] { (true, true), (true, false), (false, true) })
+        foreach (var (useLeft, useRight) in new[] { (true, true), (true, false), (false, true) })
         {
-            var left = user && userWidth > 0 ? pad + userWidth + pad : 0;
-            var right = clock && clockWidth > 0 ? bannerWidth - pad - clockWidth - pad : bannerWidth;
+            var left = useLeft && leftWidth > 0 ? pad + leftWidth + pad : 0;
+            var right = useRight && rightWidth > 0 ? bannerWidth - pad - rightWidth - pad : bannerWidth;
             if (left == 0 && right == bannerWidth) continue; // nothing beside the marking in this combination
             var centeredLeft = (bannerWidth - captionWidth) / 2;
             if (centeredLeft >= left && centeredLeft + captionWidth <= right)
@@ -176,6 +176,6 @@ public static class CaptionLayout
 
         var available = Math.Max(1, bannerWidth - 2 * pad);
         var scale = captionWidth <= available ? 1 : available / (double)captionWidth;
-        return new CaptionPlacement(0, bannerWidth, ShowUser: false, ShowClock: false, Scale: scale);
+        return new CaptionPlacement(0, bannerWidth, ShowLeft: false, ShowRight: false, Scale: scale);
     }
 }

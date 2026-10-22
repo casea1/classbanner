@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Show computer name** (`ShowComputerName`, off by default): this computer's name (hostname) on the banner.
+- **Choose where each item goes.** The clock, user name and computer name each have a position (`ClockPosition`,
+  `UserNamePosition`, `ComputerNamePosition`): the left or right of every banner, or one corner (top left, top right,
+  bottom left, bottom right), for example the clock top left, the user name top right and the computer name bottom
+  left. Items that share a place are shown together. A corner on a banner that isn't shown (bottom left with
+  top-only banners) uses the same side of the one that is. Set it in Group Policy (new 1.6 templates), the settings
+  window (a drop-down for each item) or `config --set`. The defaults are unchanged: clock on the right, user name on
+  the left, on every banner.
+
 ## [1.5.2] - 2026-10-20
 
 ### Fixed
