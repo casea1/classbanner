@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-22
+
 ### Added
 - **Show computer name** (`ShowComputerName`, off by default): this computer's name (hostname) on the banner.
 - **Choose where each item goes.** The clock, user name and computer name each have a position (`ClockPosition`,
