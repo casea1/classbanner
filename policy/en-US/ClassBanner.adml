@@ -7,6 +7,7 @@
     <stringTable>
       <string id="SUPPORTED_ClassBanner1">ClassBanner 1.0 or later</string>
       <string id="SUPPORTED_ClassBanner1_4">ClassBanner 1.4 or later</string>
+      <string id="SUPPORTED_ClassBanner1_6">ClassBanner 1.6 or later</string>
       <string id="Cat_ClassBanner">ClassBanner</string>
       <string id="Cat_Appearance">Appearance</string>
       <string id="Cat_Desktop">Desktop enforcement</string>
@@ -53,12 +54,28 @@ When disabled or not configured (default since 1.5), a full-screen application i
       <string id="AllowUserExit_Help">When enabled, the banner's right-click menu has an Exit item. Disabled by default.</string>
 
       <string id="ShowUserName">Show user name</string>
-      <string id="ShowUserName_Help">Shows the signed-in user's account name on the left side of every banner. Disabled by default.
+      <string id="ShowUserName_Help">Shows the signed-in user's account name on the banner. Disabled by default.
 
-If the banner is too narrow for the marking, the clock and the user name are hidden before the marking is ever shortened.</string>
+Position (ClassBanner 1.6 or later): the left or right of every banner, or one corner. A corner on a banner that isn't shown (for example bottom left with top-only banners) uses the same side of the banner that is. Items that share a place are shown together in the order computer name, user name, clock.
+
+If the banner is too narrow for the marking, the right-hand text and then the left-hand text are hidden before the marking is ever shortened.</string>
+
+      <string id="ShowComputerName">Show computer name</string>
+      <string id="ShowComputerName_Help">Shows this computer's name (hostname) on the banner. Disabled by default.
+
+Position: the left or right of every banner, or one corner. A corner on a banner that isn't shown (for example bottom left with top-only banners) uses the same side of the banner that is. Items that share a place are shown together in the order computer name, user name, clock.
+
+If the banner is too narrow for the marking, the right-hand text and then the left-hand text are hidden before the marking is ever shortened.</string>
+
+      <string id="Corner_Left">Left, every banner</string>
+      <string id="Corner_Right">Right, every banner</string>
+      <string id="Corner_TopLeft">Top left</string>
+      <string id="Corner_TopRight">Top right</string>
+      <string id="Corner_BottomLeft">Bottom left</string>
+      <string id="Corner_BottomRight">Bottom right</string>
 
       <string id="Clock">Show clock</string>
-      <string id="Clock_Help">Shows the date and time on the right side of the banner.
+      <string id="Clock_Help">Shows the date and time on the banner: by default on the right of every banner, or in the position chosen here (ClassBanner 1.6 or later). A corner on a banner that isn't shown uses the same side of the banner that is.
 
 Format uses .NET date/time format codes. %TZI% is replaced by Z (Zulu) or L (local). Examples:
   ddd dd-MMM-yy HH:mm%TZI%   (default)
@@ -111,7 +128,14 @@ Domain alternative: enable "Force specific screen saver" (User Configuration > A
       <presentation id="HoverTransparency">
         <decimalTextBox refId="HoverTransparency" defaultValue="40">Transparency (percent):</decimalTextBox>
       </presentation>
+      <presentation id="ShowUserName">
+        <dropdownList refId="UserNamePosition" defaultItem="0" noSort="true">Position:</dropdownList>
+      </presentation>
+      <presentation id="ShowComputerName">
+        <dropdownList refId="ComputerNamePosition" defaultItem="0" noSort="true">Position:</dropdownList>
+      </presentation>
       <presentation id="Clock">
+        <dropdownList refId="ClockPosition" defaultItem="1" noSort="true">Position:</dropdownList>
         <textBox refId="ClockFormat">
           <label>Format:</label>
           <defaultValue>ddd dd-MMM-yy HH:mm%TZI%</defaultValue>

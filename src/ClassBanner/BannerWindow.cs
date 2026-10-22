@@ -216,29 +216,28 @@ internal sealed unsafe class BannerWindow : Win32Window
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, ToColorRef(_settings.EffectiveForeColor));
 
-            // The marking is never cut off; the clock, then the user name, give way first (see CaptionLayout).
+            // The marking is never cut off; the right text, then the left text, give way first (see CaptionLayout).
             const uint flags = DT_SINGLELINE | DT_NOPREFIX;
             var caption = _settings.EffectiveCaption;
-            var clock = _host.ClockText;
+            var (left, right) = _host.SideTexts(Slot.Edge);
             var pad = (int)Math.Round(8 * Slot.Dpi / (double)BannerLayout.BaseDpi);
             var captionWidth = MeasureWidth(hdc, caption, flags);
-            var clockWidth = clock.Length > 0 ? MeasureWidth(hdc, clock, flags) : 0;
-            var user = _host.UserNameText;
-            var userWidth = user.Length > 0 ? MeasureWidth(hdc, user, flags) : 0;
-            var placement = CaptionLayout.Place(client.Right - client.Left, captionWidth, userWidth, clockWidth, pad);
+            var leftWidth = left.Length > 0 ? MeasureWidth(hdc, left, flags) : 0;
+            var rightWidth = right.Length > 0 ? MeasureWidth(hdc, right, flags) : 0;
+            var placement = CaptionLayout.Place(client.Right - client.Left, captionWidth, leftWidth, rightWidth, pad);
 
-            if (placement.ShowUser && userWidth > 0)
+            if (placement.ShowLeft && leftWidth > 0)
             {
-                var userRect = client;
-                userRect.Left += pad;
-                DrawTextW(hdc, user, -1, ref userRect, DT_LEFT | DT_VCENTER | flags);
+                var leftRect = client;
+                leftRect.Left += pad;
+                DrawTextW(hdc, left, -1, ref leftRect, DT_LEFT | DT_VCENTER | flags);
             }
 
-            if (placement.ShowClock && clockWidth > 0)
+            if (placement.ShowRight && rightWidth > 0)
             {
-                var clockRect = client;
-                clockRect.Right -= pad;
-                DrawTextW(hdc, clock, -1, ref clockRect, DT_RIGHT | DT_VCENTER | flags);
+                var rightRect = client;
+                rightRect.Right -= pad;
+                DrawTextW(hdc, right, -1, ref rightRect, DT_RIGHT | DT_VCENTER | flags);
             }
 
             var captionRect = new RECT(client.Left + placement.Left, client.Top, client.Left + placement.Right, client.Bottom);

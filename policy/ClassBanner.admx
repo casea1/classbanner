@@ -15,6 +15,7 @@
     <definitions>
       <definition name="SUPPORTED_ClassBanner1" displayName="$(string.SUPPORTED_ClassBanner1)" />
       <definition name="SUPPORTED_ClassBanner1_4" displayName="$(string.SUPPORTED_ClassBanner1_4)" />
+      <definition name="SUPPORTED_ClassBanner1_6" displayName="$(string.SUPPORTED_ClassBanner1_6)" />
     </definitions>
   </supportedOn>
   <categories>
@@ -120,11 +121,39 @@
     </policy>
 
     <policy name="ShowUserName" class="Machine" displayName="$(string.ShowUserName)" explainText="$(string.ShowUserName_Help)"
-            key="SOFTWARE\Policies\ClassBanner" valueName="ShowUserName">
+            presentation="$(presentation.ShowUserName)" key="SOFTWARE\Policies\ClassBanner" valueName="ShowUserName">
       <parentCategory ref="Appearance" />
       <supportedOn ref="SUPPORTED_ClassBanner1_4" />
       <enabledValue><decimal value="1" /></enabledValue>
       <disabledValue><decimal value="0" /></disabledValue>
+      <elements>
+        <enum id="UserNamePosition" valueName="UserNamePosition">
+          <item displayName="$(string.Corner_Left)"><value><decimal value="5" /></value></item>
+          <item displayName="$(string.Corner_Right)"><value><decimal value="6" /></value></item>
+          <item displayName="$(string.Corner_TopLeft)"><value><decimal value="1" /></value></item>
+          <item displayName="$(string.Corner_TopRight)"><value><decimal value="2" /></value></item>
+          <item displayName="$(string.Corner_BottomLeft)"><value><decimal value="3" /></value></item>
+          <item displayName="$(string.Corner_BottomRight)"><value><decimal value="4" /></value></item>
+        </enum>
+      </elements>
+    </policy>
+
+    <policy name="ShowComputerName" class="Machine" displayName="$(string.ShowComputerName)" explainText="$(string.ShowComputerName_Help)"
+            presentation="$(presentation.ShowComputerName)" key="SOFTWARE\Policies\ClassBanner" valueName="ShowComputerName">
+      <parentCategory ref="Appearance" />
+      <supportedOn ref="SUPPORTED_ClassBanner1_6" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+      <elements>
+        <enum id="ComputerNamePosition" valueName="ComputerNamePosition">
+          <item displayName="$(string.Corner_Left)"><value><decimal value="5" /></value></item>
+          <item displayName="$(string.Corner_Right)"><value><decimal value="6" /></value></item>
+          <item displayName="$(string.Corner_TopLeft)"><value><decimal value="1" /></value></item>
+          <item displayName="$(string.Corner_TopRight)"><value><decimal value="2" /></value></item>
+          <item displayName="$(string.Corner_BottomLeft)"><value><decimal value="3" /></value></item>
+          <item displayName="$(string.Corner_BottomRight)"><value><decimal value="4" /></value></item>
+        </enum>
+      </elements>
     </policy>
 
     <policy name="Clock" class="Machine" displayName="$(string.Clock)" explainText="$(string.Clock_Help)"
@@ -134,6 +163,14 @@
       <enabledValue><decimal value="1" /></enabledValue>
       <disabledValue><decimal value="0" /></disabledValue>
       <elements>
+        <enum id="ClockPosition" valueName="ClockPosition">
+          <item displayName="$(string.Corner_Left)"><value><decimal value="5" /></value></item>
+          <item displayName="$(string.Corner_Right)"><value><decimal value="6" /></value></item>
+          <item displayName="$(string.Corner_TopLeft)"><value><decimal value="1" /></value></item>
+          <item displayName="$(string.Corner_TopRight)"><value><decimal value="2" /></value></item>
+          <item displayName="$(string.Corner_BottomLeft)"><value><decimal value="3" /></value></item>
+          <item displayName="$(string.Corner_BottomRight)"><value><decimal value="4" /></value></item>
+        </enum>
         <text id="ClockFormat" valueName="ClockFormat" maxLength="100" />
         <boolean id="ClockUseZulu" valueName="ClockUseZulu">
           <trueValue><decimal value="1" /></trueValue>
