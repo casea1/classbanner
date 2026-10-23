@@ -8,6 +8,9 @@ public enum CommandKind
     Uninstall,
     Config,
     Show,
+
+    /// <summary>Print an install command that reproduces this computer's settings.</summary>
+    Export,
     Settings,
     Help,
     Version,
@@ -27,7 +30,8 @@ public sealed record ParsedCommand(
     bool KeepSettings = false,
     string? Error = null,
     bool Managed = false,
-    bool KeepUserSettings = false);
+    bool KeepUserSettings = false,
+    bool Reset = false);
 
 /// <summary>Parses the single-exe command line. Friendly options map onto <see cref="SettingKeys"/> names.</summary>
 public static partial class CommandLine
@@ -47,6 +51,8 @@ public static partial class CommandLine
           ClassBanner.exe config [options]       Change machine settings (run as administrator)
           ClassBanner.exe settings               Open the settings window (also in Control Panel)
           ClassBanner.exe show                   Print the effective settings
+          ClassBanner.exe export                 Print (and copy) an install command that sets up
+                                                 another computer the same way
           ClassBanner.exe uninstall [--keep-settings] [--keep-user-settings] [--quiet]
           ClassBanner.exe version
 
@@ -59,6 +65,8 @@ public static partial class CommandLine
           --logon-title <text>            Notice users must acknowledge before signing in
           --logon-text <text>             ("" for both removes the notice)
           --set <Name>=<Value>            Any setting, e.g. --set FontSize=12 (see README)
+          --reset                         Start from the built-in defaults instead of this computer's
+                                          current settings (the sign-in notice changes only if given)
           --no-start                      Don't start the banner service now (it starts at the next restart)
           --quiet                         No output except errors
 
@@ -79,9 +87,11 @@ public static partial class CommandLine
             Open the settings window (also in Control Panel).
         ClassBanner.exe show
             Print the settings in effect.
+        ClassBanner.exe export
+            Copy an install command that sets up another computer the same way.
         ClassBanner.exe uninstall [--keep-settings]
 
-        Options: --level, --caption <text>, --position top|bottom|both, --clock on|off, --zulu, --logon-title <text>, --logon-text <text>, --set Name=Value, --no-start, --quiet.
+        Options: --level, --caption <text>, --position top|bottom|both, --clock on|off, --zulu, --logon-title <text>, --logon-text <text>, --set Name=Value, --reset, --no-start, --quiet.
 
         Run from a command prompt to see full help. Group Policy settings override these.
         """;
@@ -110,6 +120,7 @@ public static partial class CommandLine
             "uninstall" => CommandKind.Uninstall,
             "config" or "configure" => CommandKind.Config,
             "show" or "status" => CommandKind.Show,
+            "export" => CommandKind.Export,
             "banner" or "run" => CommandKind.Run,
             "service" => CommandKind.Service,
             "settings" => CommandKind.Settings,
@@ -120,7 +131,7 @@ public static partial class CommandLine
         if (kind is null) return Fail($"Unknown command '{first}'.");
 
         var settings = new List<KeyValuePair<string, string>>();
-        bool quiet = false, noStart = false, keepSettings = false, managed = false, keepUserSettings = false;
+        bool quiet = false, noStart = false, keepSettings = false, managed = false, keepUserSettings = false, reset = false;
 
         for (var i = 1; i < args.Count; i++)
         {
@@ -175,6 +186,7 @@ public static partial class CommandLine
                     case "--quiet": case "-q": Flag(ref quiet); break;
                     case "--no-start": Flag(ref noStart); break;
                     case "--keep-settings": Flag(ref keepSettings); break;
+                    case "--reset" when kind is CommandKind.Install or CommandKind.Config: Flag(ref reset); break;
                     case "--managed" when kind == CommandKind.Run: Flag(ref managed); break;
                     case "--keep-user-settings" when kind == CommandKind.Uninstall: Flag(ref keepUserSettings); break;
                     default: return Fail($"Unknown option '{arg}'.");
@@ -199,7 +211,7 @@ public static partial class CommandLine
                     : $"Unknown setting '{name}'.");
         }
 
-        return new ParsedCommand(kind.Value, settings, quiet, noStart, keepSettings, Managed: managed, KeepUserSettings: keepUserSettings);
+        return new ParsedCommand(kind.Value, settings, quiet, noStart, keepSettings, Managed: managed, KeepUserSettings: keepUserSettings, Reset: reset);
     }
 
     private static ParsedCommand Fail(string error) => new(CommandKind.Help, [], Error: error);
@@ -207,7 +219,7 @@ public static partial class CommandLine
     private static readonly HashSet<string> Options = new(StringComparer.OrdinalIgnoreCase)
     {
         "--level", "--caption", "--position", "--clock", "--zulu", "--logon-title", "--logon-text", "--set",
-        "--quiet", "-q", "--no-start", "--keep-settings", "--managed", "--keep-user-settings",
+        "--quiet", "-q", "--no-start", "--keep-settings", "--managed", "--keep-user-settings", "--reset",
     };
 
     /// <summary>True for our own options, alone or in "--option=value" form.</summary>
@@ -221,9 +233,12 @@ public static partial class CommandLine
     public static string Join(IEnumerable<string> args) => string.Join(' ', args.Select(Quote));
 
     /// <summary>Quotes one argument using the Windows rules (backslashes only matter before a quote).</summary>
-    public static string Quote(string arg)
+    public static string Quote(string arg) => Quote(arg, force: false);
+
+    /// <summary>Like <see cref="Quote(string)"/>, but <paramref name="force"/> quotes even a plain argument.</summary>
+    public static string Quote(string arg, bool force)
     {
-        if (arg.Length > 0 && arg.IndexOfAny([' ', '\t', '\n', '\r', '"']) < 0) return arg;
+        if (!force && arg.Length > 0 && arg.IndexOfAny([' ', '\t', '\n', '\r', '"']) < 0) return arg;
 
         var sb = new System.Text.StringBuilder("\"");
         var backslashes = 0;

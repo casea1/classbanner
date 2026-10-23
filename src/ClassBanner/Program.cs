@@ -87,6 +87,7 @@ internal static class Program
             case CommandKind.Uninstall: return Installer.Uninstall(cmd, output);
             case CommandKind.Config: return Installer.Config(cmd, output);
             case CommandKind.Show: return Installer.Show(output);
+            case CommandKind.Export: return Installer.Export(output);
             case CommandKind.Version:
                 output.Line(AppInfo.Version);
                 return ExitCodes.Ok;

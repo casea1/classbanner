@@ -74,6 +74,9 @@ start /wait ClassBanner.exe config --set FontSize=12 --set WallpaperMode=Generat
 :: What is in effect, and where it came from
 ClassBanner.exe show
 
+:: An install command that sets up another computer exactly like this one (also copied to the clipboard)
+ClassBanner.exe export
+
 :: Remove (add --keep-settings to keep settings.json)
 start /wait ClassBanner.exe uninstall
 ```
@@ -89,6 +92,18 @@ uninstall see the change completely at their next sign-in. `uninstall --keep-use
 generated `wallpaper.bmp` next to it if that option was used), so the history is still there for troubleshooting or
 audit; delete the folder if you don't need it. The *ClassBanner* event log source also stays registered so earlier
 Application log entries remain readable.
+
+**Copying a configuration to other computers.** Set one computer up the way you want (the settings window is
+easiest), then click **Copy install command** in that window, or run `ClassBanner.exe export`. Either puts a
+ready-to-run command on the clipboard, for example:
+
+```bat
+start /wait ClassBanner.exe install --level Secret --reset --quiet --set ShowUserName=1 --set UserNamePosition=TopLeft --set ClockEnabled=1 --set ClockPosition=TopRight
+```
+
+It lists only the settings that differ from the defaults. `--reset` makes the result exact on a computer that
+already has other settings; without it, `install` and `config` change only the settings you give. The sign-in notice
+is changed only when the command includes it.
 
 Values can also be given as `--option=value`, e.g. `--logon-text="-- Authorized use only --"`.
 
