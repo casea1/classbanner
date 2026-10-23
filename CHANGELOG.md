@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-23
+
 ### Added
 - **Copy a configuration to other computers.** Set one computer up, then click **Copy install command** in the settings
   window or run `ClassBanner.exe export`: an `install` command with that computer's settings goes on the clipboard,
