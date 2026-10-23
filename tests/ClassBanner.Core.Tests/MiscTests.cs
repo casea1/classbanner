@@ -538,3 +538,78 @@ public class BannerCornersTests
     [Fact]
     public void Unknown_position_is_rejected() => Assert.False(SettingKeys.TryApply(new BannerSettings(), "ClockPosition", "Middle"));
 }
+
+public class ExportCommandTests
+{
+    /// <summary>What the exported command produces on a fresh computer: its arguments parsed and applied to the defaults.</summary>
+    private static BannerSettings RunOnFreshComputer(ExportedCommand exported)
+    {
+        var parsed = CommandLine.Parse(exported.Arguments.ToArray());
+        Assert.Null(parsed.Error);
+        Assert.Equal(CommandKind.Install, parsed.Kind);
+        Assert.True(parsed.Reset && parsed.Quiet);
+        var result = new BannerSettings();
+        SettingKeys.ApplyAll(result, parsed.Settings);
+        return result;
+    }
+
+    [Fact]
+    public void Round_trips_the_requested_layout()
+    {
+        var s = new BannerSettings
+        {
+            Level = ClassificationLevel.Secret,
+            ShowUserName = true, UserNamePosition = InfoPosition.TopLeft,
+            ClockEnabled = true, ClockPosition = InfoPosition.TopRight,
+            ShowComputerName = true, ComputerNamePosition = InfoPosition.BottomLeft,
+            StayAboveFullScreenApps = true,
+        };
+        var exported = ExportCommand.Build(s)!;
+        Assert.StartsWith("start /wait ClassBanner.exe install --level Secret --reset --quiet", exported.Command);
+        Assert.Contains("--set UserNamePosition=TopLeft", exported.Command);
+        Assert.Contains("--set StayAboveFullScreenApps=1", exported.Command);
+        Assert.DoesNotContain("FontSize", exported.Command); // defaults are left out
+        Assert.Equal(SettingsSerializer.Serialize(s), SettingsSerializer.Serialize(RunOnFreshComputer(exported)));
+    }
+
+    [Fact]
+    public void Text_values_are_quoted_and_round_trip()
+    {
+        var s = new BannerSettings
+        {
+            Level = ClassificationLevel.TopSecretSci,
+            Caption = "TOP SECRET//SCI//NOFORN",
+            ClockEnabled = true,
+            ClockFormat = "ddHHmm%TZI% MMM yy",
+            LogonNoticeTitle = "TS/SCI SYSTEM",
+            LogonNoticeText = "Authorized use only & monitored.",
+            BackColor = "#123456",
+        };
+        var exported = ExportCommand.Build(s)!;
+        Assert.Contains("--caption \"TOP SECRET//SCI//NOFORN\"", exported.Command);
+        Assert.Contains("--set \"ClockFormat=ddHHmm%TZI% MMM yy\"", exported.Command);
+        Assert.Contains("\"Authorized use only & monitored.\"", exported.Command);
+        Assert.Contains(exported.Notes, n => n.Contains("%%"));
+        Assert.Equal(SettingsSerializer.Serialize(s), SettingsSerializer.Serialize(RunOnFreshComputer(exported)));
+    }
+
+    [Fact]
+    public void Multi_line_notice_is_put_on_one_line_with_a_note()
+    {
+        var s = new BannerSettings { Level = ClassificationLevel.Secret, LogonNoticeTitle = "Notice", LogonNoticeText = "Line one\r\nLine two" };
+        var exported = ExportCommand.Build(s)!;
+        Assert.Contains("\"Line one Line two\"", exported.Command);
+        Assert.Contains(exported.Notes, n => n.Contains("line breaks"));
+    }
+
+    [Fact]
+    public void No_level_no_command() => Assert.Null(ExportCommand.Build(new BannerSettings()));
+
+    [Fact]
+    public void Reset_is_only_for_install_and_config()
+    {
+        Assert.True(CommandLine.Parse(["config", "--reset", "--level", "S"]).Reset);
+        Assert.NotNull(CommandLine.Parse(["uninstall", "--reset"]).Error);
+        Assert.Equal(CommandKind.Export, CommandLine.Parse(["export"]).Kind);
+    }
+}

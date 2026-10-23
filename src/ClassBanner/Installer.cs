@@ -225,6 +225,27 @@ internal static class Installer
         return ExitCodes.Ok;
     }
 
+    /// <summary>Prints an install command that sets up another computer like this one, and copies it to the clipboard.</summary>
+    public static int Export(Output output)
+    {
+        var loaded = RegistryPolicySource.LoadEffective();
+        if (ExportCommand.Build(loaded.Settings) is not { } exported)
+        {
+            output.Error("No classification level is configured on this computer, so there is nothing to export.");
+            return ExitCodes.Error;
+        }
+
+        var copied = Clipboard.SetText(exported.Command);
+        if (!output.IsConsole) output.Line(copied ? "Copied to the clipboard:" : "Could not copy to the clipboard; copy it from here (Ctrl+C):");
+        output.Line("");
+        output.Line(exported.Command);
+        if (loaded.FromPolicy) exported = exported with { Notes = [.. exported.Notes, "Includes values set by Group Policy on this computer."] };
+        if (exported.Notes.Count > 0) output.Line("");
+        foreach (var note in exported.Notes) output.Line("Note: " + note);
+        if (output.IsConsole && copied) output.Line("(Also copied to the clipboard.)");
+        return ExitCodes.Ok;
+    }
+
     /// <summary>Start menu entry for all users that opens the settings window (created with the Windows Script Host).</summary>
     private static void CreateStartMenuShortcut()
     {
@@ -287,17 +308,26 @@ internal static class Installer
     private static BannerSettings? PrepareSettings(ParsedCommand cmd, Output output, out int failure)
     {
         failure = ExitCodes.Ok;
-        var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
-        if (!file.Exists && TryLoadBetterBannerSettings(output) is { } old) file = old;
-        if (!file.Exists && TryLoadLegacySettings(output) is { } legacy) file = legacy;
-        if (!CheckSettingsFile(file, output))
+        BannerSettings settings;
+        if (cmd.Reset)
         {
-            failure = ExitCodes.Error;
-            return null;
+            // --reset: the command describes the whole configuration, so what was here before doesn't matter.
+            settings = new BannerSettings();
         }
+        else
+        {
+            var file = SettingsLoader.LoadFile(SettingsLoader.DefaultSettingsPath);
+            if (!file.Exists && TryLoadBetterBannerSettings(output) is { } old) file = old;
+            if (!file.Exists && TryLoadLegacySettings(output) is { } legacy) file = legacy;
+            if (!CheckSettingsFile(file, output))
+            {
+                failure = ExitCodes.Error;
+                return null;
+            }
 
-        foreach (var warning in file.Warnings) output.Line($"Warning: {warning} (removed when saving)");
-        var settings = file.Settings;
+            foreach (var warning in file.Warnings) output.Line($"Warning: {warning} (removed when saving)");
+            settings = file.Settings;
+        }
         SettingKeys.ApplyAll(settings, cmd.Settings);
         var policy = new RegistryPolicySource().ReadValues();
         var policyLevel = policy.TryGetValue(nameof(BannerSettings.Level), out var text) && ClassificationPresets.TryParseLevel(text, out var parsed)

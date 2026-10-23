@@ -18,6 +18,7 @@ internal sealed class SettingsWindow : Win32Window
     private const uint ExStyle = WS_EX_CONTROLPARENT;
     private const int IdOk = 1;     // IDOK: Enter
     private const int IdCancel = 2; // IDCANCEL: Esc
+    private const int IdCopyCommand = 100;
 
     private static readonly (ClassificationLevel Level, string Name)[] Levels =
         ClassificationPresets.All.Select(p => (p.Level, p.Caption)).ToArray();
@@ -58,7 +59,7 @@ internal sealed class SettingsWindow : Win32Window
 
     private nint _thickness;
     private nint _level, _caption, _position, _fontSize, _clock, _zulu, _userName, _computerName, _aboveFullScreen, _colors, _wallpaper, _screenSaver, _noticeTitle, _noticeText;
-    private nint _status, _save, _cancel, _policyNote;
+    private nint _status, _save, _cancel, _copyCommand, _policyNote;
 
     /// <summary>A label + control (or a full-width control) laid out top to bottom.</summary>
     private sealed record Row(nint Label, nint Control, int Lines = 1, nint Extra = 0);
@@ -145,6 +146,7 @@ internal sealed class SettingsWindow : Win32Window
         _status = Static("");
         _save = Button(_setup ? (Installer.IsInstalled ? "Upgrade" : "Install") : "Save", IdOk, BS_DEFPUSHBUTTON);
         _cancel = Button("Close", IdCancel, BS_PUSHBUTTON);
+        _copyCommand = Button("Copy install command", IdCopyCommand, BS_PUSHBUTTON);
     }
 
     private string SettingsNote() => _policyKeys.Count > 0
@@ -280,6 +282,7 @@ internal sealed class SettingsWindow : Win32Window
         int buttonWidth = S(88), buttonHeight = S(28);
         Place(_cancel, right - buttonWidth, y, buttonWidth, buttonHeight);
         Place(_save, right - 2 * buttonWidth - gap, y, buttonWidth, buttonHeight);
+        Place(_copyCommand, margin, y, S(150), buttonHeight);
         y += buttonHeight + margin;
 
         var client = new RECT(0, 0, right + margin, y);
@@ -298,6 +301,7 @@ internal sealed class SettingsWindow : Win32Window
                 var id = LowWord(wParam);
                 var code = HighWord(wParam);
                 if (id == IdOk && code == BN_CLICKED) Save();
+                else if (id == IdCopyCommand && code == BN_CLICKED) CopyInstallCommand();
                 else if (id == IdCancel && code == BN_CLICKED) Destroy();
                 else if (code is CBN_SELCHANGE or EN_CHANGE)
                 {
@@ -384,6 +388,27 @@ internal sealed class SettingsWindow : Win32Window
         {
             EndPaint(Handle, ps);
         }
+    }
+
+    /// <summary>
+    /// Copies an install command with the settings as shown in the window (saved or not), for setting up other
+    /// computers the same way.
+    /// </summary>
+    private void CopyInstallCommand()
+    {
+        if (ExportCommand.Build(ReadSettings()) is not { } exported)
+        {
+            ShowProblem("Choose a classification first.");
+            return;
+        }
+        if (!Clipboard.SetText(exported.Command, Handle))
+        {
+            ShowProblem("Could not copy to the clipboard. Run 'ClassBanner.exe export' instead.");
+            return;
+        }
+        _statusIsProblem = false;
+        SetWindowTextW(_status, string.Join(' ', ["Install command copied to the clipboard. Run it as administrator on other computers.", .. exported.Notes]));
+        InvalidateRect(_status, 0, true);
     }
 
     private void InvalidatePreview()
@@ -583,6 +608,7 @@ internal sealed class SettingsWindow : Win32Window
         yield return _status;
         yield return _save;
         yield return _cancel;
+        yield return _copyCommand;
     }
 
     private nint Child(string cls, string? text, uint style, uint exStyle = 0, int id = 0) =>
