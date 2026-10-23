@@ -119,10 +119,12 @@ $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
 Assert ($settings.Level -eq 'Secret' -and $settings.Caption -eq 'SECRET//NOFORN' -and $settings.ClockEnabled -and $settings.HoverTransparency -eq 30) 'config keeps good values next to a bad one'
 
 # --reset (used by exported commands) starts from the defaults instead of the current settings.
+$beforeReset = Get-Content $settingsFile -Raw
 Invoke-Banner @('config', '--reset', '--level', 'S', '--set', 'FontSize=14', '--quiet')
 $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
 Assert ($settings.FontSize -eq 14 -and $settings.HoverTransparency -eq 40 -and -not $settings.ClockEnabled -and $settings.Caption -eq $null) 'config --reset replaces the settings'
 Invoke-Banner @('export')
+Set-Content $settingsFile $beforeReset
 
 # An unreadable settings file is never overwritten.
 $good = Get-Content $settingsFile -Raw
