@@ -99,7 +99,28 @@ internal sealed unsafe class BannerWindow : Win32Window
     private nint ZOrderTarget()
     {
         if (_settings.StayAboveFullScreenApps) return HWND_TOPMOST;
-        return FullScreen.FrontmostOn(Slot.MonitorBounds, WindowsFrontToBack()) ?? HWND_TOPMOST;
+        var verdict = FullScreen.Judge(Slot.MonitorBounds, WindowsFrontToBack());
+        LogZOrderChange(verdict);
+        return verdict.Behind ?? HWND_TOPMOST;
+    }
+
+    private nint? _lastBehind;
+    private nint _lastInFront;
+
+    /// <summary>Logs when this banner steps behind a full-screen app or comes back, and which window brought it back.</summary>
+    private void LogZOrderChange(FullScreenVerdict verdict)
+    {
+        var inFront = verdict.InFront?.Handle ?? 0;
+        if (verdict.Behind == _lastBehind && inFront == _lastInFront) return;
+        var where = $"{Slot.DeviceName} {Slot.Edge}";
+        if (verdict.Behind is { } behind)
+            Log.Info($"Banner {where}: behind the full-screen window {behind:X} ({GetClassName(behind)}).");
+        else if (verdict.InFront is { } window && _lastBehind is not null)
+            Log.Info($"Banner {where}: back on top; {window.ClassName} (process {window.ProcessId}) at {window.Rect} is in front on this monitor.");
+        else if (_lastBehind is not null)
+            Log.Info($"Banner {where}: back on top; no full-screen window on this monitor.");
+        _lastBehind = verdict.Behind;
+        _lastInFront = inFront;
     }
 
     /// <summary>Visible top-level windows of other processes, front to back.</summary>
@@ -112,11 +133,15 @@ internal sealed unsafe class BannerWindow : Win32Window
             if (!IsWindowVisible(hwnd) || IsIconic(hwnd) || IsCloaked(hwnd)) continue;
             GetWindowThreadProcessId(hwnd, out var pid);
             if (pid == ownPid) continue;
-            // Tool windows and no-activate pop-ups (tooltips, notifications, overlays) aren't what the user is looking at.
+            // Tool windows, no-activate pop-ups (tooltips, notifications) and click-through overlays aren't what the user
+            // is looking at.
             var exStyle = (uint)(long)GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-            if ((exStyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) != 0) continue;
-            if (!GetWindowRect(hwnd, out var rect)) continue;
-            windows.Add(new TopWindow(hwnd, rect.ToScreenRect(), GetClassName(hwnd), pid));
+            if ((exStyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT)) != 0) continue;
+            // The visible frame: GetWindowRect includes invisible resize borders, which make a window maximized on the
+            // next monitor reach 8 px across onto this one.
+            var rect = GetVisibleBounds(hwnd);
+            if (rect.IsEmpty) continue;
+            windows.Add(new TopWindow(hwnd, rect, GetClassName(hwnd), pid));
         }
         return windows;
     }

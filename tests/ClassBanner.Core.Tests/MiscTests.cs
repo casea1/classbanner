@@ -420,6 +420,23 @@ public class FullScreenTests
     }
 
     [Fact]
+    public void Window_maximized_on_the_other_monitor_that_reaches_across_the_edge_does_not_count()
+    {
+        // Notepad maximized on the left monitor: its frame reaches 8 px onto the right monitor, where RDP is full screen.
+        var windows = new[] { Win(1, new ScreenRect(-8, -8, 1928, 1088), 10), Win(2, Monitor, 20, "TscShellContainerClass") };
+        Assert.Equal((nint)2, FullScreen.FrontmostOn(Monitor, windows));
+    }
+
+    [Fact]
+    public void Verdict_names_the_window_that_kept_the_banner_on_top()
+    {
+        var notepad = Win(1, new ScreenRect(2000, 100, 2900, 700), 10, "Notepad");
+        var verdict = FullScreen.Judge(Monitor, [notepad, Win(2, Monitor, 20, "TscShellContainerClass")]);
+        Assert.Null(verdict.Behind);
+        Assert.Equal(notepad, verdict.InFront);
+    }
+
+    [Fact]
     public void Taskbar_in_front_is_ignored()
     {
         var windows = new[] { Win(9, new ScreenRect(1920, 1040, 3840, 1080), 5, "Shell_SecondaryTrayWnd"), Win(2, Monitor, 20) };

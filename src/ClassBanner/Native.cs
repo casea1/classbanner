@@ -55,6 +55,7 @@ internal static unsafe partial class Native
     public const uint WS_EX_TOPMOST = 0x00000008;
     public const uint WS_EX_TOOLWINDOW = 0x00000080;
     public const uint WS_EX_LAYERED = 0x00080000;
+    public const uint WS_EX_TRANSPARENT = 0x00000020;
     public const uint WS_EX_NOACTIVATE = 0x08000000;
     public const uint CS_DBLCLKS = 0x0008;
     public const uint CS_HREDRAW = 0x0002;

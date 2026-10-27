@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Clicking a window on another monitor could still bring the banner back over a full-screen Remote Desktop session.
+  A window maximized on the other monitor counted as being on the session's monitor too, because its frame (including
+  Windows' invisible resize borders) reaches a few pixels across the shared edge. Windows are now judged by their
+  visible frame, a window has to overlap a monitor by more than a sliver to count, and click-through overlays are
+  ignored. When a banner comes back on top of a full-screen app, the log now says which window caused it.
+
 ## [1.7.0] - 2026-10-23
 
 ### Added

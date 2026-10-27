@@ -3,6 +3,12 @@ namespace ClassBanner.Core;
 /// <summary>A top-level window, as seen when walking the screen's windows from front to back.</summary>
 public readonly record struct TopWindow(nint Handle, ScreenRect Rect, string ClassName, uint ProcessId);
 
+/// <summary>
+/// What is in front on a monitor: <see cref="Behind"/> is the full-screen window to step behind (null: stay on top), and
+/// <see cref="InFront"/> is the window that kept the banner on top, if any (for the log).
+/// </summary>
+public readonly record struct FullScreenVerdict(nint? Behind, TopWindow? InFront);
+
 /// <summary>Whether a full-screen app is in front on a monitor, so the banner should step behind it.</summary>
 public static class FullScreen
 {
@@ -26,16 +32,31 @@ public static class FullScreen
     /// front of it, such as the Remote Desktop connection bar, don't count. What is active on another monitor doesn't
     /// matter, so clicking a window there leaves a full-screen session here covering its banner.
     /// </summary>
-    public static nint? FrontmostOn(ScreenRect monitor, IEnumerable<TopWindow> frontToBack)
+    public static nint? FrontmostOn(ScreenRect monitor, IEnumerable<TopWindow> frontToBack) => Judge(monitor, frontToBack).Behind;
+
+    /// <summary>
+    /// A window has to overlap a monitor by at least this much (pixels, both ways) to count as on it. A window maximized
+    /// on the next monitor, or snapped against the shared edge, can reach a few pixels across it.
+    /// </summary>
+    public const int MinOverlap = 16;
+
+    /// <summary>Like <see cref="FrontmostOn"/>, and also says which window kept the banner on top.</summary>
+    public static FullScreenVerdict Judge(ScreenRect monitor, IEnumerable<TopWindow> frontToBack)
     {
+        TopWindow? firstInFront = null;
         var inFront = new HashSet<uint>();
         foreach (var window in frontToBack)
         {
-            if (ShellClasses.Contains(window.ClassName) || !window.Rect.IntersectsWith(monitor)) continue;
+            if (ShellClasses.Contains(window.ClassName)) continue;
+            var overlap = window.Rect.Intersect(monitor);
+            if (overlap.Width < MinOverlap || overlap.Height < MinOverlap) continue;
             if (Covers(window.Rect, monitor, window.ClassName))
-                return inFront.All(pid => pid == window.ProcessId) ? window.Handle : null;
+                return inFront.All(pid => pid == window.ProcessId)
+                    ? new FullScreenVerdict(window.Handle, null)
+                    : new FullScreenVerdict(null, firstInFront);
+            firstInFront ??= window;
             inFront.Add(window.ProcessId);
         }
-        return null;
+        return new FullScreenVerdict(null, null);
     }
 }
