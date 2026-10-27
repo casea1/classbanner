@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-27
+
 ### Fixed
 - Clicking a window on another monitor could still bring the banner back over a full-screen Remote Desktop session.
   A window maximized on the other monitor counted as being on the session's monitor too, because its frame (including
